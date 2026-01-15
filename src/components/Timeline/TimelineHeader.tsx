@@ -22,8 +22,8 @@ export const TimelineHeader = memo(function TimelineHeader({
 
   const timeLabels = useMemo(() => {
     const labels: { slot: number; label: string }[] = [];
-    // Show label every 30 minutes (every 2 slots)
-    for (let i = 0; i <= totalSlots; i += 2) {
+    // Show label every 15 minutes (every slot)
+    for (let i = 0; i <= totalSlots; i++) {
       const time = slotIndexToTime(i, selectedDate);
       labels.push({ slot: i, label: formatTimeSlot(time) });
     }
@@ -52,17 +52,17 @@ export const TimelineHeader = memo(function TimelineHeader({
         {timeLabels.map(({ slot, label }) => (
           <div
             key={slot}
-            className="absolute top-0 h-full flex items-center justify-center text-xs text-muted-foreground font-medium"
+            className="absolute top-0 h-full flex items-center text-xs text-muted-foreground font-medium"
             style={{
-              left: slot * slotWidth,
-              width: slotWidth * 2,
+              left: slot * slotWidth + 4,
+              width: slotWidth - 4,
             }}
             aria-label={label}
           >
             {label}
           </div>
         ))}
-        {/* 30-minute vertical lines */}
+        {/* 15-minute vertical lines */}
         {timeLabels.map(({ slot }) => (
           <div
             key={`line-${slot}`}

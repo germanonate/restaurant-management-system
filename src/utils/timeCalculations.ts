@@ -114,9 +114,11 @@ export function getCurrentTimeSlotIndex(referenceDate: Date): SlotIndex {
   return timeToSlotIndex(now, referenceDate);
 }
 
-export function getCurrentTimePosition(referenceDate: Date, slotWidth: number): number | null {
+export function getCurrentTimePosition(referenceDate: Date, slotWidth: number, showOnAnyDate = true): number | null {
   const now = new Date();
-  if (!isSameDay(now, referenceDate)) {
+
+  // If not showing on any date, only show on actual today
+  if (!showOnAnyDate && !isSameDay(now, referenceDate)) {
     return null;
   }
 
@@ -124,10 +126,13 @@ export function getCurrentTimePosition(referenceDate: Date, slotWidth: number): 
   const operatingStart = setMinutes(setHours(dayStart, START_HOUR), 0);
   const operatingEnd = addMinutes(dayStart, END_HOUR * 60);
 
-  if (now < operatingStart || now > operatingEnd) {
+  // Create a "simulated now" using current time of day but on the reference date
+  const simulatedNow = setMinutes(setHours(dayStart, now.getHours()), now.getMinutes());
+
+  if (simulatedNow < operatingStart || simulatedNow > operatingEnd) {
     return null;
   }
 
-  const minutesFromStart = differenceInMinutes(now, operatingStart);
+  const minutesFromStart = differenceInMinutes(simulatedNow, operatingStart);
   return (minutesFromStart / SLOT_MINUTES) * slotWidth;
 }

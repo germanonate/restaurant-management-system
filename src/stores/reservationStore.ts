@@ -10,7 +10,7 @@ import type {
   DragState,
 } from '@/types/models';
 import { mockRestaurant, mockSectors, mockTables, mockReservations, SEED_DATE } from '@/mocks/mocks';
-import { parseISO, isSameDay } from 'date-fns';
+import { parse, parseISO, isSameDay } from 'date-fns';
 
 interface ReservationStore {
   // Data
@@ -74,8 +74,8 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
   tables: mockTables,
   reservations: mockReservations,
 
-  // Initial UI state
-  selectedDate: parseISO(SEED_DATE),
+  // Initial UI state - use parse to interpret date in local timezone
+  selectedDate: parse(SEED_DATE, 'yyyy-MM-dd', new Date()),
   filters: initialFilters,
   zoomLevel: 100,
   collapsedSectors: new Set(),

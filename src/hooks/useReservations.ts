@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useReservationStore } from '@/stores/reservationStore';
 import { useConflictDetection } from './useConflictDetection';
 import type { Reservation, UUID, ReservationStatus, Customer, Priority } from '@/types/models';
-import { addMinutes, parseISO } from 'date-fns';
+import { addMinutes, parseISO, isSameDay } from 'date-fns';
 
 interface CreateReservationInput {
   tableId: UUID;
@@ -57,7 +57,9 @@ interface UseReservationsReturn {
 
 export function useReservations(): UseReservationsReturn {
   const reservations = useReservationStore((state) => state.reservations);
-  const getFilteredReservations = useReservationStore((state) => state.getFilteredReservations);
+  const filters = useReservationStore((state) => state.filters);
+  const selectedDate = useReservationStore((state) => state.selectedDate);
+  const tables = useReservationStore((state) => state.tables);
   const addReservation = useReservationStore((state) => state.addReservation);
   const updateReservationStore = useReservationStore((state) => state.updateReservation);
   const deleteReservationStore = useReservationStore((state) => state.deleteReservation);
@@ -71,7 +73,39 @@ export function useReservations(): UseReservationsReturn {
 
   const { checkConflict } = useConflictDetection();
 
-  const filteredReservations = useMemo(() => getFilteredReservations(), [getFilteredReservations]);
+  const filteredReservations = useMemo(() => {
+    return reservations.filter((reservation) => {
+      // Date filter
+      if (!isSameDay(parseISO(reservation.startTime), selectedDate)) {
+        return false;
+      }
+
+      // Sector filter
+      if (filters.sectorIds.length > 0) {
+        const table = tables.find((t) => t.id === reservation.tableId);
+        if (!table || !filters.sectorIds.includes(table.sectorId)) {
+          return false;
+        }
+      }
+
+      // Status filter
+      if (filters.status && reservation.status !== filters.status) {
+        return false;
+      }
+
+      // Search filter
+      if (filters.searchQuery) {
+        const query = filters.searchQuery.toLowerCase();
+        const matchesName = reservation.customer.name.toLowerCase().includes(query);
+        const matchesPhone = reservation.customer.phone.toLowerCase().includes(query);
+        if (!matchesName && !matchesPhone) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [reservations, filters, selectedDate, tables]);
 
   const selectedReservation = useMemo(
     () => (selectedReservationId ? getReservationById(selectedReservationId) ?? null : null),

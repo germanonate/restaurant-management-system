@@ -198,7 +198,7 @@ export function Toolbar() {
               placeholder="Search name or phone..."
               value={searchValue}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-9 w-[200px]"
+              className="pl-9 w-[220px]"
               aria-label="Search reservations by name or phone"
             />
           </div>

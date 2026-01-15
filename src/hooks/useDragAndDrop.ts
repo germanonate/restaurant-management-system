@@ -40,8 +40,8 @@ interface UseDragAndDropReturn {
 
   // Move drag
   handleMoveDragStart: (reservationId: UUID, tableId: UUID, clientX: number, gridRect: DOMRect) => void;
-  handleMoveDragMove: (clientX: number, clientY: number, gridRect: DOMRect, tableHeight: number) => void;
-  handleMoveDragEnd: (tableIds: UUID[]) => DragMoveResult | null;
+  handleMoveDragMove: (clientX: number, clientY: number, gridRect: DOMRect, getTableByY: (y: number) => UUID | null) => void;
+  handleMoveDragEnd: () => DragMoveResult | null;
 
   // Resize drag
   handleResizeDragStart: (
@@ -82,14 +82,6 @@ export function useDragAndDrop(): UseDragAndDropReturn {
     [slotWidth]
   );
 
-  const getTableIndexFromY = useCallback(
-    (clientY: number, gridRect: DOMRect, tableHeight: number): number => {
-      const y = clientY - gridRect.top;
-      return Math.floor(y / tableHeight);
-    },
-    []
-  );
-
   // Create drag handlers
   const handleCreateDragStart = useCallback(
     (tableId: UUID, clientX: number, gridRect: DOMRect) => {
@@ -111,7 +103,10 @@ export function useDragAndDrop(): UseDragAndDropReturn {
       if (dragState.dragType !== 'create' || dragState.startSlot === null) return;
 
       const currentSlot = getSlotFromX(clientX, gridRect);
-      const endSlot = Math.max(currentSlot, dragState.startSlot + 2); // Minimum 30 min
+      // Min 2 slots (30 min), max 24 slots (6 hours)
+      const minEndSlot = dragState.startSlot + 2;
+      const maxEndSlot = dragState.startSlot + 24;
+      const endSlot = Math.max(minEndSlot, Math.min(maxEndSlot, currentSlot));
 
       setDragState({ endSlot });
     },
@@ -166,27 +161,29 @@ export function useDragAndDrop(): UseDragAndDropReturn {
   );
 
   const handleMoveDragMove = useCallback(
-    (clientX: number, clientY: number, gridRect: DOMRect, tableHeight: number) => {
+    (clientX: number, clientY: number, gridRect: DOMRect, getTableByY: (y: number) => UUID | null) => {
       if (dragState.dragType !== 'move') return;
 
       const currentSlot = getSlotFromX(clientX, gridRect);
-      // Calculate table index for potential future use
-      getTableIndexFromY(clientY, gridRect, tableHeight);
+      const y = clientY - gridRect.top;
+      const newTableId = getTableByY(y);
 
       setDragState({
         endSlot: currentSlot,
+        tableId: newTableId ?? dragState.tableId,
       });
     },
-    [dragState.dragType, getSlotFromX, getTableIndexFromY, setDragState]
+    [dragState.dragType, dragState.tableId, getSlotFromX, setDragState]
   );
 
   const handleMoveDragEnd = useCallback(
-    (_tableIds: UUID[]): DragMoveResult | null => {
+    (): DragMoveResult | null => {
       if (
         dragState.dragType !== 'move' ||
         dragState.reservationId === null ||
         dragState.startSlot === null ||
-        dragState.endSlot === null
+        dragState.endSlot === null ||
+        dragState.tableId === null
       ) {
         resetDragState();
         return null;
@@ -207,7 +204,7 @@ export function useDragAndDrop(): UseDragAndDropReturn {
 
       const result: DragMoveResult = {
         reservationId: dragState.reservationId,
-        newTableId: dragState.tableId ?? reservation.tableId,
+        newTableId: dragState.tableId,
         newStartTime,
         newEndTime,
       };
@@ -272,13 +269,17 @@ export function useDragAndDrop(): UseDragAndDropReturn {
     let newEndTime: Date;
     let newDurationMinutes: number;
 
+    // Duration limits: min 30 minutes (2 slots), max 6 hours (24 slots = 360 minutes)
+    const MIN_DURATION = 30;
+    const MAX_DURATION = 360;
+
     if (dragState.dragType === 'resize-end') {
       newStartTime = new Date(reservation.startTime);
-      newDurationMinutes = Math.max(30, Math.min(240, reservation.durationMinutes + slotDiff * 15));
+      newDurationMinutes = Math.max(MIN_DURATION, Math.min(MAX_DURATION, reservation.durationMinutes + slotDiff * 15));
       newEndTime = addMinutes(newStartTime, newDurationMinutes);
     } else {
       newEndTime = new Date(reservation.endTime);
-      newDurationMinutes = Math.max(30, Math.min(240, reservation.durationMinutes - slotDiff * 15));
+      newDurationMinutes = Math.max(MIN_DURATION, Math.min(MAX_DURATION, reservation.durationMinutes - slotDiff * 15));
       newStartTime = addMinutes(newEndTime, -newDurationMinutes);
     }
 

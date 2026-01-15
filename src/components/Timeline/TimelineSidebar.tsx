@@ -1,9 +1,12 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useReservationStore } from '@/stores/reservationStore';
+import { getTablesWithSectors } from '@/utils/gridHelpers';
 import type { Sector, Table, UUID } from '@/types/models';
 import { ROW_HEIGHT } from '@/utils/timeCalculations';
+
+const SECTOR_HEADER_HEIGHT = 32; // h-8 = 32px
 
 interface TimelineSidebarProps {
   width: number;
@@ -111,22 +114,37 @@ export const TimelineSidebar = memo(function TimelineSidebar({
     [tables]
   );
 
+  // Calculate total content height to match grid
+  const tablesWithSectors = useMemo(
+    () => getTablesWithSectors(tables, sectors, collapsedSectors),
+    [tables, sectors, collapsedSectors]
+  );
+
+  const contentHeight = useMemo(() => {
+    // Sector headers + visible table rows
+    const sectorHeadersHeight = sortedSectors.length * SECTOR_HEADER_HEIGHT;
+    const tableRowsHeight = tablesWithSectors.length * ROW_HEIGHT;
+    return sectorHeadersHeight + tableRowsHeight;
+  }, [sortedSectors.length, tablesWithSectors.length]);
+
   return (
     <div
-      className="sticky left-0 z-20 bg-white border-r border-border shrink-0"
+      className="sticky left-0 z-20 bg-white border-r border-border shrink-0 overflow-y-auto scrollbar-hide"
       style={{ width }}
       role="rowgroup"
       aria-label="Tables sidebar"
     >
-      {sortedSectors.map((sector) => (
-        <SectorGroup
-          key={sector.id}
-          sector={sector}
-          tables={getTablesForSector(sector.id)}
-          isCollapsed={collapsedSectors.has(sector.id)}
-          onToggleCollapse={() => toggleSectorCollapse(sector.id)}
-        />
-      ))}
+      <div style={{ minHeight: contentHeight }}>
+        {sortedSectors.map((sector) => (
+          <SectorGroup
+            key={sector.id}
+            sector={sector}
+            tables={getTablesForSector(sector.id)}
+            isCollapsed={collapsedSectors.has(sector.id)}
+            onToggleCollapse={() => toggleSectorCollapse(sector.id)}
+          />
+        ))}
+      </div>
     </div>
   );
 });

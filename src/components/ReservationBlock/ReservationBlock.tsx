@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useRef } from 'react';
-import { Users, Crown, UsersRound, GripVertical } from 'lucide-react';
+import { Users, GripVertical } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -18,39 +18,19 @@ import {
   formatTimeRange,
   ROW_HEIGHT,
 } from '@/utils/timeCalculations';
-import type { Reservation, Priority } from '@/types/models';
+import type { Reservation } from '@/types/models';
 import { RESERVATION_STATUS_COLORS, PRIORITY_LABELS } from '@/types/models';
 import { cn } from '@/lib/utils';
 
 interface ReservationBlockProps {
   reservation: Reservation;
-  rowIndex: number;
+  top: number;
   slotWidth: number;
 }
 
-const PriorityIcon = memo(function PriorityIcon({
-  priority,
-}: {
-  priority: Priority;
-}) {
-  switch (priority) {
-    case 'VIP':
-      return <Crown className="h-3 w-3 text-amber-500" aria-label="VIP" />;
-    case 'LARGE_GROUP':
-      return (
-        <UsersRound
-          className="h-3 w-3 text-purple-500"
-          aria-label="Large group"
-        />
-      );
-    default:
-      return null;
-  }
-});
-
 export const ReservationBlock = memo(function ReservationBlock({
   reservation,
-  rowIndex,
+  top,
   slotWidth,
 }: ReservationBlockProps) {
   const selectedDate = useReservationStore((state) => state.selectedDate);
@@ -81,7 +61,6 @@ export const ReservationBlock = memo(function ReservationBlock({
     slotWidth
   );
   const width = getReservationWidth(reservation.durationMinutes, slotWidth);
-  const top = rowIndex * ROW_HEIGHT;
 
   const statusColor = RESERVATION_STATUS_COLORS[reservation.status];
   const isCancelled = reservation.status === 'CANCELLED';
@@ -204,7 +183,6 @@ export const ReservationBlock = memo(function ReservationBlock({
 
               {/* Content */}
               <div className="flex items-center gap-1.5 min-w-0 flex-1 text-white pl-2">
-                <PriorityIcon priority={reservation.priority} />
                 <Users className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="text-xs font-medium" aria-hidden="true">
                   {reservation.partySize}

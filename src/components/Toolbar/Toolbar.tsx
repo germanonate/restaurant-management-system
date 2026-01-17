@@ -398,7 +398,7 @@ export function Toolbar() {
                 New Reservation
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => loadTestData(200)}>
+              <DropdownMenuItem onClick={() => loadTestData()}>
                 <Database className="h-4 w-4 mr-2" />
                 Add Test Data
               </DropdownMenuItem>
@@ -478,7 +478,7 @@ export function Toolbar() {
                 New Reservation
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => loadTestData(200)}>
+              <DropdownMenuItem onClick={() => loadTestData()}>
                 <Database className="h-4 w-4 mr-2" />
                 Add Test Data
               </DropdownMenuItem>

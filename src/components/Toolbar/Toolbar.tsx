@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   Calendar as CalendarIcon,
   Search,
@@ -8,6 +8,9 @@ import {
   ZoomOut,
   Filter,
   ChevronDown,
+  Plus,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,11 +31,20 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useReservationStore } from '@/stores/reservationStore';
 import { useReservations } from '@/hooks/useReservations';
+import { ReservationSheet } from '@/components/ReservationBlock/ReservationSheet';
 import type { ReservationStatus, UUID } from '@/types/models';
 import { STATUS_LABELS } from '@/types/models';
 import { cn } from '@/lib/utils';
@@ -48,11 +60,53 @@ export function Toolbar() {
   const zoomLevel = useReservationStore((state) => state.zoomLevel);
   const setZoomLevel = useReservationStore((state) => state.setZoomLevel);
   const sectors = useReservationStore((state) => state.sectors);
+  const undo = useReservationStore((state) => state.undo);
+  const redo = useReservationStore((state) => state.redo);
+  const canUndo = useReservationStore((state) => state.canUndo);
+  const canRedo = useReservationStore((state) => state.canRedo);
 
-  const { totalCount, filteredCount } = useReservations();
+  const { totalCount, filteredCount, createReservation } = useReservations();
 
   const [searchValue, setSearchValue] = useState(filters.searchQuery);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [mobileDatePickerOpen, setMobileDatePickerOpen] = useState(false);
+
+  const handleCreateReservation = useCallback(
+    (data: {
+      customer: { name: string; phone: string; email?: string; notes?: string };
+      partySize: number;
+      durationMinutes: number;
+      status: 'PENDING' | 'CONFIRMED' | 'SEATED' | 'FINISHED' | 'NO_SHOW' | 'CANCELLED';
+      priority: 'STANDARD' | 'VIP' | 'LARGE_GROUP';
+      notes?: string;
+      tableId?: UUID;
+      startTime?: string;
+    }) => {
+      if (!data.tableId || !data.startTime) {
+        return { success: false, error: 'Table and time are required' };
+      }
+
+      const result = createReservation({
+        tableId: data.tableId,
+        customer: data.customer,
+        partySize: data.partySize,
+        startTime: parseISO(data.startTime),
+        durationMinutes: data.durationMinutes,
+        status: data.status,
+        priority: data.priority,
+        notes: data.notes,
+      });
+
+      if (result.success) {
+        setCreateSheetOpen(false);
+      }
+
+      return result;
+    },
+    [createReservation]
+  );
 
   const hasActiveFilters = useMemo(() => {
     return (
@@ -73,13 +127,43 @@ export function Toolbar() {
 
   const handleSectorToggle = useCallback(
     (sectorId: UUID) => {
-      const newSectorIds = filters.sectorIds.includes(sectorId)
-        ? filters.sectorIds.filter((id) => id !== sectorId)
-        : [...filters.sectorIds, sectorId];
+      let newSectorIds: UUID[];
+
+      if (filters.sectorIds.length === 0) {
+        // Currently showing all - uncheck means select all except this one
+        newSectorIds = sectors.filter((s) => s.id !== sectorId).map((s) => s.id);
+      } else if (filters.sectorIds.includes(sectorId)) {
+        // Remove from selection
+        newSectorIds = filters.sectorIds.filter((id) => id !== sectorId);
+        // If we unchecked the last one, clear filter to show all
+        if (newSectorIds.length === 0) {
+          newSectorIds = [];
+        }
+      } else {
+        // Add to selection
+        newSectorIds = [...filters.sectorIds, sectorId];
+        // If all are now selected, clear filter to show all
+        if (newSectorIds.length === sectors.length) {
+          newSectorIds = [];
+        }
+      }
+
       setFilters({ sectorIds: newSectorIds });
     },
-    [filters.sectorIds, setFilters]
+    [filters.sectorIds, sectors, setFilters]
   );
+
+  const handleSelectAllSectors = useCallback(() => {
+    // If all are selected (or none selected showing all), clear the filter
+    // Otherwise, select all sectors
+    if (filters.sectorIds.length === 0 || filters.sectorIds.length === sectors.length) {
+      setFilters({ sectorIds: [] });
+    } else {
+      setFilters({ sectorIds: sectors.map((s) => s.id) });
+    }
+  }, [filters.sectorIds.length, sectors, setFilters]);
+
+  const allSectorsSelected = filters.sectorIds.length === 0 || filters.sectorIds.length === sectors.length;
 
   const handleStatusChange = useCallback(
     (value: string) => {
@@ -115,7 +199,7 @@ export function Toolbar() {
       <div className="hidden md:flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Date picker */}
-          <Popover>
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
@@ -130,7 +214,12 @@ export function Toolbar() {
               <Calendar
                 mode="single"
                 selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedDate(date);
+                    setDatePickerOpen(false);
+                  }
+                }}
                 initialFocus
               />
             </PopoverContent>
@@ -153,12 +242,20 @@ export function Toolbar() {
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+              <DropdownMenuItem
+                onClick={handleSelectAllSectors}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {allSectorsSelected ? 'Deselect All' : 'Select All'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {sectors.map((sector) => (
                 <DropdownMenuCheckboxItem
                   key={sector.id}
-                  checked={filters.sectorIds.includes(sector.id)}
+                  checked={filters.sectorIds.length === 0 || filters.sectorIds.includes(sector.id)}
                   onCheckedChange={() => handleSectorToggle(sector.id)}
+                  onSelect={(e) => e.preventDefault()}
                 >
                   <span
                     className="w-3 h-3 rounded-full mr-2"
@@ -222,28 +319,75 @@ export function Toolbar() {
           </span>
         </div>
 
-        {/* Zoom controls */}
-        <div className="flex items-center gap-2">
+        {/* Undo/Redo, Zoom controls and Create button */}
+        <div className="flex items-center gap-3">
+          <TooltipProvider>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={undo}
+                    disabled={!canUndo()}
+                    aria-label="Undo"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Undo</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={redo}
+                    disabled={!canRedo()}
+                    aria-label="Redo"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Redo</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleZoomOut}
+              disabled={zoomLevel === ZOOM_LEVELS[0]}
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium w-12 text-center">
+              {zoomLevel}%
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleZoomIn}
+              disabled={zoomLevel === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+          </div>
+
           <Button
-            variant="outline"
-            size="icon"
-            onClick={handleZoomOut}
-            disabled={zoomLevel === ZOOM_LEVELS[0]}
-            aria-label="Zoom out"
+            onClick={() => setCreateSheetOpen(true)}
+            className="gap-2 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]"
           >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <span className="text-sm font-medium w-12 text-center">
-            {zoomLevel}%
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleZoomIn}
-            disabled={zoomLevel === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
-            aria-label="Zoom in"
-          >
-            <ZoomIn className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
+            New Reservation
           </Button>
         </div>
       </div>
@@ -252,7 +396,7 @@ export function Toolbar() {
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
           {/* Date picker */}
-          <Popover>
+          <Popover open={mobileDatePickerOpen} onOpenChange={setMobileDatePickerOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
@@ -268,7 +412,12 @@ export function Toolbar() {
               <Calendar
                 mode="single"
                 selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedDate(date);
+                    setMobileDatePickerOpen(false);
+                  }
+                }}
                 initialFocus
               />
             </PopoverContent>
@@ -296,6 +445,56 @@ export function Toolbar() {
               </Badge>
             )}
           </Button>
+
+          {/* Create button */}
+          <Button
+            size="sm"
+            onClick={() => setCreateSheetOpen(true)}
+            className="gap-1 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="sr-only sm:not-sr-only">New</span>
+          </Button>
+
+          {/* Undo/Redo */}
+          <TooltipProvider>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={undo}
+                    disabled={!canUndo()}
+                    aria-label="Undo"
+                  >
+                    <Undo2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Undo</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={redo}
+                    disabled={!canRedo()}
+                    aria-label="Redo"
+                  >
+                    <Redo2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Redo</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
 
           {/* Zoom controls */}
           <div className="flex items-center gap-1">
@@ -357,12 +556,20 @@ export function Toolbar() {
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent>
+                <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+                  <DropdownMenuItem
+                    onClick={handleSelectAllSectors}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {allSectorsSelected ? 'Deselect All' : 'Select All'}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {sectors.map((sector) => (
                     <DropdownMenuCheckboxItem
                       key={sector.id}
-                      checked={filters.sectorIds.includes(sector.id)}
+                      checked={filters.sectorIds.length === 0 || filters.sectorIds.includes(sector.id)}
                       onCheckedChange={() => handleSectorToggle(sector.id)}
+                      onSelect={(e) => e.preventDefault()}
                     >
                       <span
                         className="w-3 h-3 rounded-full mr-2"
@@ -415,6 +622,14 @@ export function Toolbar() {
           </div>
         )}
       </div>
+
+      {/* Create Reservation Sheet */}
+      <ReservationSheet
+        open={createSheetOpen}
+        onOpenChange={setCreateSheetOpen}
+        mode="create"
+        onSubmit={handleCreateReservation}
+      />
     </div>
   );
 }

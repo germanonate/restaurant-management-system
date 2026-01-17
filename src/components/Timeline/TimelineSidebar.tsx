@@ -99,11 +99,18 @@ export const TimelineSidebar = memo(function TimelineSidebar({
   const sectors = useReservationStore((state) => state.sectors);
   const tables = useReservationStore((state) => state.tables);
   const collapsedSectors = useReservationStore((state) => state.collapsedSectors);
+  const filters = useReservationStore((state) => state.filters);
   const toggleSectorCollapse = useReservationStore(
     (state) => state.toggleSectorCollapse
   );
 
-  const sortedSectors = [...sectors].sort((a, b) => a.sortOrder - b.sortOrder);
+  // Filter sectors based on active filter, then sort
+  const sortedSectors = useMemo(() => {
+    const filtered = filters.sectorIds.length > 0
+      ? sectors.filter((s) => filters.sectorIds.includes(s.id))
+      : sectors;
+    return [...filtered].sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [sectors, filters.sectorIds]);
 
   const getTablesForSector = useCallback(
     (sectorId: UUID) => {
@@ -116,8 +123,8 @@ export const TimelineSidebar = memo(function TimelineSidebar({
 
   // Calculate total content height to match grid
   const tablesWithSectors = useMemo(
-    () => getTablesWithSectors(tables, sectors, collapsedSectors),
-    [tables, sectors, collapsedSectors]
+    () => getTablesWithSectors(tables, sortedSectors, collapsedSectors),
+    [tables, sortedSectors, collapsedSectors]
   );
 
   const contentHeight = useMemo(() => {

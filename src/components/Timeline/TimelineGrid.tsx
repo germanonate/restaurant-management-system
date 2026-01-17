@@ -1,5 +1,4 @@
 import { memo, useMemo, useCallback, useRef, useState } from 'react';
-import { parseISO } from 'date-fns';
 import { useReservationStore } from '@/stores/reservationStore';
 import { useReservations } from '@/hooks/useReservations';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
@@ -34,6 +33,7 @@ export const TimelineGrid = memo(function TimelineGrid() {
   const tables = useReservationStore((state) => state.tables);
   const collapsedSectors = useReservationStore((state) => state.collapsedSectors);
   const selectedDate = useReservationStore((state) => state.selectedDate);
+  const filters = useReservationStore((state) => state.filters);
 
   const { filteredReservations, createReservation, updateReservation, getReservation } = useReservations();
   const {
@@ -56,14 +56,16 @@ export const TimelineGrid = memo(function TimelineGrid() {
   const totalSlots = getTotalSlots();
   const gridWidth = totalSlots * slotWidth;
 
-  const tablesWithSectors = useMemo(
-    () => getTablesWithSectors(tables, sectors, collapsedSectors),
-    [tables, sectors, collapsedSectors]
-  );
+  const sortedSectors = useMemo(() => {
+    const filtered = filters.sectorIds.length > 0
+      ? sectors.filter((s) => filters.sectorIds.includes(s.id))
+      : sectors;
+    return [...filtered].sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [sectors, filters.sectorIds]);
 
-  const sortedSectors = useMemo(
-    () => [...sectors].sort((a, b) => a.sortOrder - b.sortOrder),
-    [sectors]
+  const tablesWithSectors = useMemo(
+    () => getTablesWithSectors(tables, sortedSectors, collapsedSectors),
+    [tables, sortedSectors, collapsedSectors]
   );
 
   // Calculate Y offset for each table and sector header positions
@@ -162,6 +164,12 @@ export const TimelineGrid = memo(function TimelineGrid() {
   const handleMouseUp = useCallback(() => {
     if (!dragState.isDragging) return;
 
+    // Don't apply changes if there's a conflict
+    if (hasConflict) {
+      cancelDrag();
+      return;
+    }
+
     switch (dragState.dragType) {
       case 'create': {
         const result = handleCreateDragEnd();
@@ -193,7 +201,7 @@ export const TimelineGrid = memo(function TimelineGrid() {
         break;
       }
     }
-  }, [dragState.isDragging, dragState.dragType, handleCreateDragEnd, handleMoveDragEnd, handleResizeDragEnd, tablesWithSectors, updateReservation]);
+  }, [dragState.isDragging, dragState.dragType, handleCreateDragEnd, handleMoveDragEnd, handleResizeDragEnd, updateReservation, hasConflict, cancelDrag]);
 
   const handleMouseLeave = useCallback(() => {
     if (dragState.isDragging) {
@@ -210,14 +218,19 @@ export const TimelineGrid = memo(function TimelineGrid() {
       status: 'PENDING' | 'CONFIRMED' | 'SEATED' | 'FINISHED' | 'NO_SHOW' | 'CANCELLED';
       priority: 'STANDARD' | 'VIP' | 'LARGE_GROUP';
       notes?: string;
+      tableId?: string;
+      startTime?: string;
     }) => {
       if (!sheetData) return;
+
+      // Use the startTime from form data if provided (user edited it), otherwise use the original
+      const startTime = data.startTime ? new Date(data.startTime) : sheetData.startTime;
 
       const result = createReservation({
         tableId: sheetData.tableId,
         customer: data.customer,
         partySize: data.partySize,
-        startTime: sheetData.startTime,
+        startTime,
         durationMinutes: data.durationMinutes,
         status: data.status,
         priority: data.priority,
@@ -261,8 +274,8 @@ export const TimelineGrid = memo(function TimelineGrid() {
       return null;
     }
 
-    if (dragState.dragType === 'create') {
-      if (dragState.tableId === null) return null;
+    // Create preview
+    if (dragState.dragType === 'create' && dragState.tableId !== null) {
       const yOffset = tableYOffsets.get(dragState.tableId);
       if (yOffset === undefined) return null;
 
@@ -271,38 +284,34 @@ export const TimelineGrid = memo(function TimelineGrid() {
       return { left, width, top: yOffset, type: 'create' as const };
     }
 
-    if (dragState.dragType === 'move') {
-      if (dragState.reservationId === null || dragState.tableId === null) return null;
+    // Move preview
+    if (dragState.dragType === 'move' && dragState.reservationId !== null && dragState.tableId !== null) {
       const reservation = getReservation(dragState.reservationId);
       if (!reservation) return null;
 
       const yOffset = tableYOffsets.get(dragState.tableId);
       if (yOffset === undefined) return null;
 
-      // Calculate new position based on slot difference
       const slotDiff = dragState.endSlot - dragState.startSlot;
-      const originalSlot = timeToSlotIndex(parseISO(reservation.startTime), selectedDate);
+      const originalSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
       const newStartSlot = originalSlot + slotDiff;
       const durationSlots = durationToSlots(reservation.durationMinutes);
 
       const left = newStartSlot * slotWidth;
       const width = durationSlots * slotWidth;
-      return { left, width, top: yOffset, type: 'move' as const };
+      return { left, width, top: yOffset, type: 'move' as const, name: reservation.customer.name };
     }
 
-    if (dragState.dragType === 'resize-start' || dragState.dragType === 'resize-end') {
-      if (dragState.reservationId === null) return null;
+    // Resize preview
+    if ((dragState.dragType === 'resize-start' || dragState.dragType === 'resize-end') && dragState.reservationId !== null) {
       const reservation = getReservation(dragState.reservationId);
       if (!reservation) return null;
-
-      const table = tablesWithSectors.find(t => t.id === reservation.tableId);
-      if (!table) return null;
 
       const yOffset = tableYOffsets.get(reservation.tableId);
       if (yOffset === undefined) return null;
 
       const slotDiff = dragState.endSlot - dragState.startSlot;
-      const originalStartSlot = timeToSlotIndex(parseISO(reservation.startTime), selectedDate);
+      const originalStartSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
       const originalDurationSlots = durationToSlots(reservation.durationMinutes);
 
       let newStartSlot: number;
@@ -318,11 +327,11 @@ export const TimelineGrid = memo(function TimelineGrid() {
 
       const left = newStartSlot * slotWidth;
       const width = newDurationSlots * slotWidth;
-      return { left, width, top: yOffset, type: 'resize' as const };
+      return { left, width, top: yOffset, type: 'resize' as const, name: reservation.customer.name };
     }
 
     return null;
-  }, [dragState, tableYOffsets, slotWidth, getReservation, tablesWithSectors, selectedDate]);
+  }, [dragState, tableYOffsets, slotWidth, getReservation, selectedDate]);
 
   return (
     <>
@@ -393,39 +402,37 @@ export const TimelineGrid = memo(function TimelineGrid() {
         {dragPreview && (
           <div
             className={cn(
-              'absolute rounded-md pointer-events-none transition-all z-40',
-              dragPreview.type === 'create' && [
-                'border-2 border-dashed',
-                hasConflict
-                  ? 'bg-red-100 border-red-500'
-                  : 'bg-blue-100 border-blue-500'
-              ],
-              (dragPreview.type === 'move' || dragPreview.type === 'resize') && [
-                'border-2 shadow-lg',
-                hasConflict
-                  ? 'bg-red-200/80 border-red-400'
-                  : 'bg-[rgb(255,147,67)]/40 border-[rgb(255,147,67)]'
-              ]
+              'absolute rounded-md pointer-events-none z-40 border-2',
+              dragPreview.type === 'create' && 'border-dashed',
+              hasConflict
+                ? 'bg-red-200 border-red-500 shadow-lg shadow-red-500/30'
+                : dragPreview.type === 'create'
+                  ? 'bg-blue-100 border-blue-500'
+                  : 'bg-[rgb(255,147,67)]/80 border-[rgb(255,147,67)] shadow-lg'
             )}
             style={{
               left: dragPreview.left,
               top: dragPreview.top + 4,
               width: Math.max(dragPreview.width, 40),
               height: ROW_HEIGHT - 8,
-              boxShadow: dragPreview.type !== 'create' ? '0 8px 25px -5px rgba(0, 0, 0, 0.3)' : undefined,
             }}
             aria-hidden="true"
           >
-            {dragPreview.type === 'create' && (
-              <span className="absolute inset-0 flex items-center justify-center text-sm font-medium text-blue-700">
+            {dragPreview.type === 'create' ? (
+              <span className={cn(
+                'absolute inset-0 flex items-center justify-center text-sm font-medium',
+                hasConflict ? 'text-red-700' : 'text-blue-700'
+              )}>
                 {dragState.startSlot !== null && dragState.endSlot !== null
                   ? `${slotsToDuration(dragState.endSlot - dragState.startSlot)} min`
                   : ''}
               </span>
-            )}
-            {(dragPreview.type === 'move' || dragPreview.type === 'resize') && dragState.reservationId && (
-              <span className="absolute inset-0 flex items-center justify-center text-sm font-medium text-white/90 px-2 truncate">
-                {getReservation(dragState.reservationId)?.customer.name ?? ''}
+            ) : (
+              <span className={cn(
+                'absolute inset-0 flex items-center justify-center text-sm font-medium truncate px-2',
+                hasConflict ? 'text-red-700' : 'text-white'
+              )}>
+                {'name' in dragPreview ? dragPreview.name : ''}
               </span>
             )}
           </div>

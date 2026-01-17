@@ -6,6 +6,7 @@ import {
   slotIndexToTime,
   slotsToDuration,
   clampSlotIndex,
+  timeToSlotIndex,
   BASE_SLOT_WIDTH,
 } from '@/utils/timeCalculations';
 import type { UUID, DragState } from '@/types/models';
@@ -195,11 +196,18 @@ export function useDragAndDrop(): UseDragAndDropReturn {
         return null;
       }
 
+      // Calculate the slot difference (how many slots the mouse moved)
       const slotDiff = dragState.endSlot - dragState.startSlot;
-      const newStartTime = addMinutes(
-        slotIndexToTime(0, selectedDate),
-        (dragState.startSlot + slotDiff) * 15
-      );
+
+      // Get the original reservation's start slot using the proper utility
+      const reservationStartTime = new Date(reservation.startTime);
+      const originalStartSlot = timeToSlotIndex(reservationStartTime, selectedDate);
+
+      // Calculate new start slot by adding the difference
+      const newStartSlot = clampSlotIndex(originalStartSlot + slotDiff);
+
+      // Convert slot to time
+      const newStartTime = slotIndexToTime(newStartSlot, selectedDate);
       const newEndTime = addMinutes(newStartTime, reservation.durationMinutes);
 
       const result: DragMoveResult = {
@@ -301,9 +309,12 @@ export function useDragAndDrop(): UseDragAndDropReturn {
 
   // Check for conflicts during drag
   const hasConflict = (() => {
-    if (!dragState.isDragging || dragState.tableId === null) return false;
+    if (!dragState.isDragging || dragState.startSlot === null || dragState.endSlot === null) {
+      return false;
+    }
 
-    if (dragState.dragType === 'create' && dragState.startSlot !== null && dragState.endSlot !== null) {
+    // Create operation
+    if (dragState.dragType === 'create' && dragState.tableId !== null) {
       const startTime = slotIndexToTime(dragState.startSlot, selectedDate);
       const endTime = slotIndexToTime(dragState.endSlot, selectedDate);
 
@@ -312,6 +323,64 @@ export function useDragAndDrop(): UseDragAndDropReturn {
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
       });
+
+      return conflict.hasConflict;
+    }
+
+    // Move operation
+    if (dragState.dragType === 'move' && dragState.reservationId !== null && dragState.tableId !== null) {
+      const reservation = getReservationById(dragState.reservationId);
+      if (!reservation) return false;
+
+      const slotDiff = dragState.endSlot - dragState.startSlot;
+      const originalStartSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
+      const newStartSlot = clampSlotIndex(originalStartSlot + slotDiff);
+      const newStartTime = slotIndexToTime(newStartSlot, selectedDate);
+      const newEndTime = addMinutes(newStartTime, reservation.durationMinutes);
+
+      const conflict = checkConflict(
+        {
+          tableId: dragState.tableId,
+          startTime: newStartTime.toISOString(),
+          endTime: newEndTime.toISOString(),
+        },
+        dragState.reservationId
+      );
+
+      return conflict.hasConflict;
+    }
+
+    // Resize operation
+    if ((dragState.dragType === 'resize-start' || dragState.dragType === 'resize-end') && dragState.reservationId !== null) {
+      const reservation = getReservationById(dragState.reservationId);
+      if (!reservation) return false;
+
+      const slotDiff = dragState.endSlot - dragState.startSlot;
+      const originalStartSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
+      const originalDurationSlots = Math.ceil(reservation.durationMinutes / 15);
+
+      let newStartSlot: number;
+      let newDurationSlots: number;
+
+      if (dragState.dragType === 'resize-end') {
+        newStartSlot = originalStartSlot;
+        newDurationSlots = Math.max(2, Math.min(24, originalDurationSlots + slotDiff));
+      } else {
+        newDurationSlots = Math.max(2, Math.min(24, originalDurationSlots - slotDiff));
+        newStartSlot = originalStartSlot + (originalDurationSlots - newDurationSlots);
+      }
+
+      const newStartTime = slotIndexToTime(newStartSlot, selectedDate);
+      const newEndTime = addMinutes(newStartTime, newDurationSlots * 15);
+
+      const conflict = checkConflict(
+        {
+          tableId: reservation.tableId,
+          startTime: newStartTime.toISOString(),
+          endTime: newEndTime.toISOString(),
+        },
+        dragState.reservationId
+      );
 
       return conflict.hasConflict;
     }

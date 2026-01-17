@@ -51,6 +51,7 @@ export const ReservationBlock = memo(function ReservationBlock({
     handleMoveDragStart,
     handleResizeDragStart,
     dragState,
+    hasConflict,
   } = useDragAndDrop();
 
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -124,6 +125,7 @@ export const ReservationBlock = memo(function ReservationBlock({
 
   const isBeingDragged =
     dragState.isDragging && dragState.reservationId === reservation.id;
+  const showConflict = isBeingDragged && hasConflict;
 
   return (
     <TooltipProvider>
@@ -145,19 +147,20 @@ export const ReservationBlock = memo(function ReservationBlock({
               className={cn(
                 'absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing',
                 'flex items-center gap-1 px-2 overflow-hidden',
-                'transition-shadow hover:shadow-md',
+                'transition-all hover:shadow-md',
                 'group',
                 isCancelled && 'opacity-60',
-                isBeingDragged && 'opacity-50 shadow-lg z-50'
+                isBeingDragged && 'opacity-80 shadow-lg z-50',
+                showConflict && 'border-2 border-red-500 shadow-red-500/50 shadow-lg'
               )}
               style={{
                 left,
                 top: top + 4,
                 width: Math.max(width, 40),
                 height: ROW_HEIGHT - 8,
-                backgroundColor: statusColor,
-                borderColor: isCancelled ? '#6B7280' : statusColor,
-                backgroundImage: isCancelled
+                backgroundColor: showConflict ? '#FEE2E2' : statusColor,
+                borderColor: showConflict ? undefined : (isCancelled ? '#6B7280' : statusColor),
+                backgroundImage: isCancelled && !showConflict
                   ? 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(107,114,128,0.3) 5px, rgba(107,114,128,0.3) 10px)'
                   : undefined,
               }}
@@ -246,7 +249,12 @@ export const ReservationBlock = memo(function ReservationBlock({
         mode="edit"
         reservation={reservation}
         onSubmit={(data) => {
-          const result = handleUpdateReservation(data);
+          // Convert startTime string to Date if provided
+          const updateData = {
+            ...data,
+            startTime: data.startTime ? new Date(data.startTime) : undefined,
+          };
+          const result = handleUpdateReservation(updateData);
           if (result.success) {
             setSheetOpen(false);
           }

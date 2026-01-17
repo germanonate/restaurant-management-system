@@ -9,8 +9,14 @@ import type {
   FilterState,
   DragState,
 } from '@/types/models';
-import { mockRestaurant, mockSectors, mockTables, mockReservations, SEED_DATE } from '@/mocks/mocks';
-import { parse, parseISO, isSameDay } from 'date-fns';
+import { seedRestaurant, seedSectors, seedTables, seedReservations } from '@/seed/seed';
+import { parseISO, isSameDay } from 'date-fns';
+
+interface HistoryEntry {
+  reservations: Reservation[];
+}
+
+const MAX_HISTORY_SIZE = 50;
 
 interface ReservationStore {
   // Data
@@ -18,6 +24,10 @@ interface ReservationStore {
   sectors: Sector[];
   tables: Table[];
   reservations: Reservation[];
+
+  // History for undo/redo
+  past: HistoryEntry[];
+  future: HistoryEntry[];
 
   // UI State
   selectedDate: Date;
@@ -36,6 +46,12 @@ interface ReservationStore {
   setSelectedReservation: (id: UUID | null) => void;
   setDragState: (state: Partial<DragState>) => void;
   resetDragState: () => void;
+
+  // Undo/Redo
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 
   // CRUD
   addReservation: (reservation: Reservation) => void;
@@ -67,15 +83,33 @@ const initialFilters: FilterState = {
   searchQuery: '',
 };
 
-export const useReservationStore = create<ReservationStore>((set, get) => ({
-  // Initial data
-  restaurant: mockRestaurant,
-  sectors: mockSectors,
-  tables: mockTables,
-  reservations: mockReservations,
+// Helper to save current state to history
+const saveToHistory = (state: ReservationStore): { past: HistoryEntry[]; future: HistoryEntry[] } => {
+  const newPast = [...state.past, { reservations: state.reservations }];
+  // Limit history size
+  if (newPast.length > MAX_HISTORY_SIZE) {
+    newPast.shift();
+  }
+  return { past: newPast, future: [] };
+};
 
-  // Initial UI state - use parse to interpret date in local timezone
-  selectedDate: parse(SEED_DATE, 'yyyy-MM-dd', new Date()),
+export const useReservationStore = create<ReservationStore>((set, get) => ({
+  // Initial data from seed
+  restaurant: seedRestaurant,
+  sectors: seedSectors,
+  tables: seedTables,
+  reservations: seedReservations,
+
+  // History
+  past: [],
+  future: [],
+
+  // Initial UI state - start with today's date
+  selectedDate: (() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  })(),
   filters: initialFilters,
   zoomLevel: 100,
   collapsedSectors: new Set(),
@@ -114,14 +148,48 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
 
   resetDragState: () => set({ dragState: initialDragState }),
 
-  // CRUD
+  // Undo/Redo
+  undo: () =>
+    set((state) => {
+      if (state.past.length === 0) return state;
+
+      const previous = state.past[state.past.length - 1];
+      const newPast = state.past.slice(0, -1);
+
+      return {
+        past: newPast,
+        future: [{ reservations: state.reservations }, ...state.future],
+        reservations: previous.reservations,
+      };
+    }),
+
+  redo: () =>
+    set((state) => {
+      if (state.future.length === 0) return state;
+
+      const next = state.future[0];
+      const newFuture = state.future.slice(1);
+
+      return {
+        past: [...state.past, { reservations: state.reservations }],
+        future: newFuture,
+        reservations: next.reservations,
+      };
+    }),
+
+  canUndo: () => get().past.length > 0,
+  canRedo: () => get().future.length > 0,
+
+  // CRUD (with history)
   addReservation: (reservation) =>
     set((state) => ({
+      ...saveToHistory(state),
       reservations: [...state.reservations, reservation],
     })),
 
   updateReservation: (id, updates) =>
     set((state) => ({
+      ...saveToHistory(state),
       reservations: state.reservations.map((r) =>
         r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r
       ),
@@ -129,6 +197,7 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
 
   deleteReservation: (id) =>
     set((state) => ({
+      ...saveToHistory(state),
       reservations: state.reservations.filter((r) => r.id !== id),
       selectedReservationId:
         state.selectedReservationId === id ? null : state.selectedReservationId,
@@ -136,6 +205,7 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
 
   updateReservationStatus: (id, status) =>
     set((state) => ({
+      ...saveToHistory(state),
       reservations: state.reservations.map((r) =>
         r.id === id ? { ...r, status, updatedAt: new Date().toISOString() } : r
       ),
@@ -155,6 +225,7 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
     };
 
     set((state) => ({
+      ...saveToHistory(state),
       reservations: [...state.reservations, newReservation],
     }));
 

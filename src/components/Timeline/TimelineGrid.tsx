@@ -4,7 +4,7 @@ import { useReservations } from '@/hooks/useReservations';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { ReservationBlock } from '@/components/ReservationBlock';
 import { CurrentTimeLine } from './CurrentTimeLine';
-import { ReservationSheet } from '@/components/ReservationBlock/ReservationSheet';
+import { LazyReservationSheet } from '@/components/ReservationBlock/LazyReservationSheet';
 import {
   getTotalSlots,
   BASE_SLOT_WIDTH,
@@ -15,9 +15,12 @@ import {
 } from '@/utils/timeCalculations';
 import { getTablesWithSectors } from '@/utils/gridHelpers';
 import type { UUID } from '@/types/models';
+import type { ViewportState } from './Timeline';
 import { cn } from '@/lib/utils';
 
-const SECTOR_HEADER_HEIGHT = 32; // h-8 = 32px
+const SECTOR_HEADER_HEIGHT = 32;
+const OVERSCAN_COLUMNS = 40; // Large overscan to prevent blinking during scroll
+const OVERSCAN_ROWS = 5; // Extra rows to render outside viewport
 
 interface DragPreviewData {
   tableId: UUID;
@@ -26,7 +29,11 @@ interface DragPreviewData {
   durationMinutes: number;
 }
 
-export const TimelineGrid = memo(function TimelineGrid() {
+interface TimelineGridProps {
+  viewport: ViewportState;
+}
+
+export const TimelineGrid = memo(function TimelineGrid({ viewport }: TimelineGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   const zoomLevel = useReservationStore((state) => state.zoomLevel);
   const sectors = useReservationStore((state) => state.sectors);
@@ -76,7 +83,7 @@ export const TimelineGrid = memo(function TimelineGrid() {
 
     for (const sector of sortedSectors) {
       sectorPositions.push({ id: sector.id, y: currentY });
-      currentY += SECTOR_HEADER_HEIGHT; // Add sector header height
+      currentY += SECTOR_HEADER_HEIGHT;
       const sectorTables = tablesWithSectors.filter(t => t.sector.id === sector.id);
       for (const table of sectorTables) {
         offsets.set(table.id, currentY);
@@ -87,7 +94,6 @@ export const TimelineGrid = memo(function TimelineGrid() {
     return { tableYOffsets: offsets, sectorHeaderPositions: sectorPositions };
   }, [sortedSectors, tablesWithSectors]);
 
-  // Grid height includes sector headers + table rows
   const gridHeight = sortedSectors.length * SECTOR_HEADER_HEIGHT + tablesWithSectors.length * ROW_HEIGHT;
 
   // Group reservations by table for efficient rendering
@@ -101,7 +107,83 @@ export const TimelineGrid = memo(function TimelineGrid() {
     return map;
   }, [filteredReservations]);
 
-  // Get table by Y position (accounting for sector headers)
+  // Calculate visible ranges for virtualization
+  const visibleRange = useMemo(() => {
+    // If viewport not measured yet, show reasonable defaults
+    if (viewport.viewportWidth === 0 || viewport.viewportHeight === 0) {
+      return { startCol: 0, endCol: Math.min(totalSlots, 60), startY: 0, endY: 2000 };
+    }
+
+    const startCol = Math.max(0, Math.floor(viewport.scrollLeft / slotWidth) - OVERSCAN_COLUMNS);
+    const endCol = Math.min(totalSlots, Math.ceil((viewport.scrollLeft + viewport.viewportWidth) / slotWidth) + OVERSCAN_COLUMNS);
+    const startY = Math.max(0, viewport.scrollTop - OVERSCAN_ROWS * ROW_HEIGHT);
+    const endY = viewport.scrollTop + viewport.viewportHeight + OVERSCAN_ROWS * ROW_HEIGHT;
+
+    return { startCol, endCol, startY, endY };
+  }, [viewport, slotWidth, totalSlots]);
+
+  // Only render visible vertical grid lines (every 4th for hour markers visible, every 1 for 15-min)
+  const visibleGridLines = useMemo(() => {
+    const lines: number[] = [];
+    for (let i = visibleRange.startCol; i <= visibleRange.endCol; i++) {
+      lines.push(i * slotWidth);
+    }
+    return lines;
+  }, [visibleRange.startCol, visibleRange.endCol, slotWidth]);
+
+  // Only render visible sector headers
+  const visibleSectorHeaders = useMemo(() => {
+    return sectorHeaderPositions.filter(
+      ({ y }) => y + SECTOR_HEADER_HEIGHT > visibleRange.startY && y < visibleRange.endY
+    );
+  }, [sectorHeaderPositions, visibleRange.startY, visibleRange.endY]);
+
+  // Only render visible tables and their row lines
+  const visibleTables = useMemo(() => {
+    return tablesWithSectors.filter((table) => {
+      const yOffset = tableYOffsets.get(table.id);
+      if (yOffset === undefined) return false;
+      return yOffset + ROW_HEIGHT > visibleRange.startY && yOffset < visibleRange.endY;
+    });
+  }, [tablesWithSectors, tableYOffsets, visibleRange.startY, visibleRange.endY]);
+
+  // Only render visible row lines
+  const visibleRowLines = useMemo(() => {
+    const lines: number[] = [];
+    for (const table of visibleTables) {
+      const yOffset = tableYOffsets.get(table.id) ?? 0;
+      if (!lines.includes(yOffset)) lines.push(yOffset);
+      if (!lines.includes(yOffset + ROW_HEIGHT)) lines.push(yOffset + ROW_HEIGHT);
+    }
+    return lines.sort((a, b) => a - b);
+  }, [visibleTables, tableYOffsets]);
+
+  // Only render visible reservations
+  const visibleReservations = useMemo(() => {
+    const result: Array<{ reservation: typeof filteredReservations[0]; yOffset: number }> = [];
+
+    for (const table of visibleTables) {
+      const tableReservations = reservationsByTable.get(table.id) || [];
+      const yOffset = tableYOffsets.get(table.id) ?? 0;
+
+      for (const reservation of tableReservations) {
+        // Calculate reservation's X position
+        const startSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
+        const endSlot = startSlot + durationToSlots(reservation.durationMinutes);
+        const resLeft = startSlot * slotWidth;
+        const resRight = endSlot * slotWidth;
+
+        // Check if reservation is in visible horizontal range
+        if (resRight > visibleRange.startCol * slotWidth && resLeft < visibleRange.endCol * slotWidth) {
+          result.push({ reservation, yOffset });
+        }
+      }
+    }
+
+    return result;
+  }, [visibleTables, reservationsByTable, tableYOffsets, selectedDate, slotWidth, visibleRange]);
+
+  // Get table by Y position
   const getTableByYPosition = useCallback(
     (y: number) => {
       for (const table of tablesWithSectors) {
@@ -115,7 +197,6 @@ export const TimelineGrid = memo(function TimelineGrid() {
     [tablesWithSectors, tableYOffsets]
   );
 
-  // Get table ID by Y position (for drag operations)
   const getTableIdByY = useCallback(
     (y: number): UUID | null => {
       const table = getTableByYPosition(y);
@@ -124,17 +205,14 @@ export const TimelineGrid = memo(function TimelineGrid() {
     [getTableByYPosition]
   );
 
-  // Mouse event handlers for drag-to-create
+  // Mouse event handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0 || !gridRef.current) return;
-
       const rect = gridRef.current.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const table = getTableByYPosition(y);
-
       if (!table) return;
-
       handleCreateDragStart(table.id, e.clientX, rect);
     },
     [getTableByYPosition, handleCreateDragStart]
@@ -164,7 +242,6 @@ export const TimelineGrid = memo(function TimelineGrid() {
   const handleMouseUp = useCallback(() => {
     if (!dragState.isDragging) return;
 
-    // Don't apply changes if there's a conflict
     if (hasConflict) {
       cancelDrag();
       return;
@@ -209,7 +286,6 @@ export const TimelineGrid = memo(function TimelineGrid() {
     }
   }, [dragState.isDragging, cancelDrag]);
 
-  // Create reservation from sheet
   const handleCreateReservation = useCallback(
     (data: {
       customer: { name: string; phone: string; email?: string; notes?: string };
@@ -222,8 +298,6 @@ export const TimelineGrid = memo(function TimelineGrid() {
       startTime?: string;
     }) => {
       if (!sheetData) return;
-
-      // Use the startTime from form data if provided (user edited it), otherwise use the original
       const startTime = data.startTime ? new Date(data.startTime) : sheetData.startTime;
 
       const result = createReservation({
@@ -247,69 +321,39 @@ export const TimelineGrid = memo(function TimelineGrid() {
     [sheetData, createReservation]
   );
 
-  // Generate 15-minute grid lines (every slot)
-  const gridLines = useMemo(() => {
-    const lines: number[] = [];
-    for (let i = 0; i <= totalSlots; i++) {
-      lines.push(i * slotWidth);
-    }
-    return lines;
-  }, [totalSlots, slotWidth]);
-
-  // Generate horizontal row lines (at table boundaries, accounting for sector headers)
-  const rowLines = useMemo(() => {
-    const lines: number[] = [];
-    for (const table of tablesWithSectors) {
-      const yOffset = tableYOffsets.get(table.id) ?? 0;
-      lines.push(yOffset);
-      lines.push(yOffset + ROW_HEIGHT);
-    }
-    // Remove duplicates and sort
-    return [...new Set(lines)].sort((a, b) => a - b);
-  }, [tablesWithSectors, tableYOffsets]);
-
-  // Drag preview for create, move, and resize operations
+  // Drag preview
   const dragPreview = useMemo(() => {
     if (!dragState.isDragging || dragState.startSlot === null || dragState.endSlot === null) {
       return null;
     }
 
-    // Create preview
     if (dragState.dragType === 'create' && dragState.tableId !== null) {
       const yOffset = tableYOffsets.get(dragState.tableId);
       if (yOffset === undefined) return null;
-
       const left = dragState.startSlot * slotWidth;
       const width = (dragState.endSlot - dragState.startSlot) * slotWidth;
       return { left, width, top: yOffset, type: 'create' as const };
     }
 
-    // Move preview
     if (dragState.dragType === 'move' && dragState.reservationId !== null && dragState.tableId !== null) {
       const reservation = getReservation(dragState.reservationId);
       if (!reservation) return null;
-
       const yOffset = tableYOffsets.get(dragState.tableId);
       if (yOffset === undefined) return null;
-
       const slotDiff = dragState.endSlot - dragState.startSlot;
       const originalSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
       const newStartSlot = originalSlot + slotDiff;
       const durationSlots = durationToSlots(reservation.durationMinutes);
-
       const left = newStartSlot * slotWidth;
       const width = durationSlots * slotWidth;
       return { left, width, top: yOffset, type: 'move' as const, name: reservation.customer.name };
     }
 
-    // Resize preview
     if ((dragState.dragType === 'resize-start' || dragState.dragType === 'resize-end') && dragState.reservationId !== null) {
       const reservation = getReservation(dragState.reservationId);
       if (!reservation) return null;
-
       const yOffset = tableYOffsets.get(reservation.tableId);
       if (yOffset === undefined) return null;
-
       const slotDiff = dragState.endSlot - dragState.startSlot;
       const originalStartSlot = timeToSlotIndex(new Date(reservation.startTime), selectedDate);
       const originalDurationSlots = durationToSlots(reservation.durationMinutes);
@@ -335,11 +379,14 @@ export const TimelineGrid = memo(function TimelineGrid() {
 
   return (
     <>
-      {/* Grid area */}
       <div
         ref={gridRef}
         className="relative cursor-crosshair select-none"
-        style={{ width: gridWidth, height: gridHeight }}
+        style={{
+          width: gridWidth,
+          height: gridHeight,
+          contain: 'strict', // CSS containment for better performance
+        }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -347,56 +394,61 @@ export const TimelineGrid = memo(function TimelineGrid() {
         role="grid"
         aria-label="Reservation timeline grid"
       >
-          {/* Sector header backgrounds */}
-          {sectorHeaderPositions.map(({ id, y }) => (
-            <div
-              key={`sector-bg-${id}`}
-              className="absolute left-0 bg-muted/50 pointer-events-none"
-              style={{
-                top: y,
-                width: gridWidth,
-                height: SECTOR_HEADER_HEIGHT,
-              }}
-              aria-hidden="true"
-            />
-          ))}
+        {/* Sector header backgrounds - only visible */}
+        {visibleSectorHeaders.map(({ id, y }) => (
+          <div
+            key={`sector-bg-${id}`}
+            className="absolute left-0 bg-muted/50 pointer-events-none"
+            style={{
+              top: y,
+              width: gridWidth,
+              height: SECTOR_HEADER_HEIGHT,
+              transform: 'translateZ(0)', // GPU acceleration
+            }}
+            aria-hidden="true"
+          />
+        ))}
 
-          {/* Vertical grid lines (15 min) */}
-          {gridLines.map((x, i) => (
-            <div
-              key={`v-${i}`}
-              className="absolute top-0 bottom-0 w-px bg-border pointer-events-none"
-              style={{ left: x, height: gridHeight }}
-              aria-hidden="true"
-            />
-          ))}
+        {/* Vertical grid lines - only visible */}
+        {visibleGridLines.map((x) => (
+          <div
+            key={`v-${x}`}
+            className="absolute top-0 w-px bg-border pointer-events-none"
+            style={{
+              left: x,
+              height: gridHeight,
+              transform: 'translateZ(0)',
+            }}
+            aria-hidden="true"
+          />
+        ))}
 
-          {/* Horizontal row lines */}
-          {rowLines.map((y, i) => (
-            <div
-              key={`h-${i}`}
-              className="absolute left-0 right-0 h-px bg-border pointer-events-none"
-              style={{ top: y, width: gridWidth }}
-              aria-hidden="true"
-            />
-          ))}
+        {/* Horizontal row lines - only visible */}
+        {visibleRowLines.map((y) => (
+          <div
+            key={`h-${y}`}
+            className="absolute left-0 h-px bg-border pointer-events-none"
+            style={{
+              top: y,
+              width: gridWidth,
+              transform: 'translateZ(0)',
+            }}
+            aria-hidden="true"
+          />
+        ))}
 
-          {/* Current time line */}
-          <CurrentTimeLine />
+        {/* Current time line */}
+        <CurrentTimeLine />
 
-          {/* Reservations */}
-          {tablesWithSectors.map((table) => {
-            const tableReservations = reservationsByTable.get(table.id) || [];
-            const yOffset = tableYOffsets.get(table.id) ?? 0;
-            return tableReservations.map((reservation) => (
-              <ReservationBlock
-                key={reservation.id}
-                reservation={reservation}
-                top={yOffset}
-                slotWidth={slotWidth}
-              />
-            ));
-          })}
+        {/* Reservations - only visible */}
+        {visibleReservations.map(({ reservation, yOffset }) => (
+          <ReservationBlock
+            key={reservation.id}
+            reservation={reservation}
+            top={yOffset}
+            slotWidth={slotWidth}
+          />
+        ))}
 
         {/* Drag preview */}
         {dragPreview && (
@@ -415,6 +467,7 @@ export const TimelineGrid = memo(function TimelineGrid() {
               top: dragPreview.top + 4,
               width: Math.max(dragPreview.width, 40),
               height: ROW_HEIGHT - 8,
+              transform: 'translateZ(0)',
             }}
             aria-hidden="true"
           >
@@ -439,8 +492,7 @@ export const TimelineGrid = memo(function TimelineGrid() {
         )}
       </div>
 
-      {/* Create reservation sheet */}
-      <ReservationSheet
+      <LazyReservationSheet
         open={sheetOpen}
         onOpenChange={(open) => {
           setSheetOpen(open);

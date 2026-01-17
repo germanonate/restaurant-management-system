@@ -11,7 +11,7 @@ import { useReservationStore } from '@/stores/reservationStore';
 import { useReservations } from '@/hooks/useReservations';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { ReservationContextMenu } from './ReservationContextMenu';
-import { ReservationSheet } from './ReservationSheet';
+import { LazyReservationSheet } from './LazyReservationSheet';
 import {
   getReservationPosition,
   getReservationWidth,
@@ -26,6 +26,26 @@ interface ReservationBlockProps {
   reservation: Reservation;
   top: number;
   slotWidth: number;
+}
+
+// Custom comparison to prevent unnecessary re-renders
+function arePropsEqual(
+  prevProps: ReservationBlockProps,
+  nextProps: ReservationBlockProps
+): boolean {
+  return (
+    prevProps.reservation.id === nextProps.reservation.id &&
+    prevProps.reservation.status === nextProps.reservation.status &&
+    prevProps.reservation.startTime === nextProps.reservation.startTime &&
+    prevProps.reservation.endTime === nextProps.reservation.endTime &&
+    prevProps.reservation.durationMinutes === nextProps.reservation.durationMinutes &&
+    prevProps.reservation.customer.name === nextProps.reservation.customer.name &&
+    prevProps.reservation.partySize === nextProps.reservation.partySize &&
+    prevProps.reservation.priority === nextProps.reservation.priority &&
+    prevProps.reservation.tableId === nextProps.reservation.tableId &&
+    prevProps.top === nextProps.top &&
+    prevProps.slotWidth === nextProps.slotWidth
+  );
 }
 
 export const ReservationBlock = memo(function ReservationBlock({
@@ -163,6 +183,8 @@ export const ReservationBlock = memo(function ReservationBlock({
                 backgroundImage: isCancelled && !showConflict
                   ? 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(107,114,128,0.3) 5px, rgba(107,114,128,0.3) 10px)'
                   : undefined,
+                transform: 'translateZ(0)', // GPU acceleration
+                willChange: isBeingDragged ? 'transform' : 'auto',
               }}
               onMouseDown={handleMouseDown}
               onDoubleClick={handleDoubleClick}
@@ -243,7 +265,7 @@ export const ReservationBlock = memo(function ReservationBlock({
         </TooltipContent>
       </Tooltip>
 
-      <ReservationSheet
+      <LazyReservationSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         mode="edit"
@@ -263,4 +285,4 @@ export const ReservationBlock = memo(function ReservationBlock({
       />
     </TooltipProvider>
   );
-});
+}, arePropsEqual);

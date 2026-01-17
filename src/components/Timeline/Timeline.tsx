@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, memo } from 'react';
+import { useRef, useCallback, useEffect, memo, useState } from 'react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineSidebar } from './TimelineSidebar';
 import { TimelineGrid } from './TimelineGrid';
@@ -7,14 +7,55 @@ import { getCurrentTimePosition, BASE_SLOT_WIDTH } from '@/utils/timeCalculation
 
 const SIDEBAR_WIDTH = 160;
 
+export interface ViewportState {
+  scrollLeft: number;
+  scrollTop: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
 export const Timeline = memo(function Timeline() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
-  const sidebarRef = useRef<HTMLDivElement>(null);
+  const headerContentRef = useRef<HTMLDivElement>(null);
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
 
   const selectedDate = useReservationStore((state) => state.selectedDate);
   const zoomLevel = useReservationStore((state) => state.zoomLevel);
   const hasScrolledRef = useRef(false);
+
+  // Viewport state for virtualization (updated less frequently)
+  const [viewport, setViewport] = useState<ViewportState>({
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 0,
+    viewportHeight: 0,
+  });
+
+  // Refs for throttling
+  const rafRef = useRef<number | null>(null);
+  const lastScrollRef = useRef({ left: 0, top: 0 });
+
+  // Initialize viewport size
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+
+    const updateViewportSize = () => {
+      if (scrollContainerRef.current) {
+        setViewport((prev) => ({
+          ...prev,
+          viewportWidth: scrollContainerRef.current!.clientWidth,
+          viewportHeight: scrollContainerRef.current!.clientHeight,
+        }));
+      }
+    };
+
+    updateViewportSize();
+
+    const resizeObserver = new ResizeObserver(updateViewportSize);
+    resizeObserver.observe(scrollContainerRef.current);
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Scroll to current time on initial mount only
   useEffect(() => {
@@ -23,27 +64,57 @@ export const Timeline = memo(function Timeline() {
     const slotWidth = (BASE_SLOT_WIDTH * zoomLevel) / 100;
     const currentTimePosition = getCurrentTimePosition(selectedDate, slotWidth);
 
-    // If current time is visible (not null), scroll to show it on the left with some padding
     if (currentTimePosition !== null) {
-      const padding = 50; // Small padding from the left edge
+      const padding = 50;
       scrollContainerRef.current.scrollLeft = Math.max(0, currentTimePosition - padding);
       hasScrolledRef.current = true;
     }
   }, [selectedDate, zoomLevel]);
 
-  // Sync scroll positions
+  // Optimized scroll handler
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
 
     const { scrollLeft, scrollTop } = scrollContainerRef.current;
 
-    if (headerRef.current) {
-      headerRef.current.scrollLeft = scrollLeft;
+    // Use CSS transform for immediate, GPU-accelerated header/sidebar sync
+    if (headerContentRef.current) {
+      headerContentRef.current.style.transform = `translateX(${-scrollLeft}px)`;
+    }
+    if (sidebarContentRef.current) {
+      sidebarContentRef.current.style.transform = `translateY(${-scrollTop}px)`;
     }
 
-    if (sidebarRef.current) {
-      sidebarRef.current.scrollTop = scrollTop;
+    // Only update viewport state when scroll has moved significantly (reduces re-renders)
+    const scrollThreshold = 50; // pixels
+    const deltaX = Math.abs(scrollLeft - lastScrollRef.current.left);
+    const deltaY = Math.abs(scrollTop - lastScrollRef.current.top);
+
+    if (deltaX > scrollThreshold || deltaY > scrollThreshold) {
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(() => {
+          if (scrollContainerRef.current) {
+            const { scrollLeft, scrollTop } = scrollContainerRef.current;
+            lastScrollRef.current = { left: scrollLeft, top: scrollTop };
+            setViewport((prev) => ({
+              ...prev,
+              scrollLeft,
+              scrollTop,
+            }));
+          }
+          rafRef.current = null;
+        });
+      }
     }
+  }, []);
+
+  // Cleanup RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -52,24 +123,35 @@ export const Timeline = memo(function Timeline() {
       role="region"
       aria-label="Reservation timeline"
     >
-      {/* Header row with sticky time labels */}
-      <div
-        ref={headerRef}
-        className="flex overflow-hidden shrink-0"
-        aria-hidden="true"
-      >
-        <TimelineHeader sidebarWidth={SIDEBAR_WIDTH} />
+      {/* Header row - uses transform for smooth sync */}
+      <div className="flex overflow-hidden shrink-0" aria-hidden="true">
+        <div
+          className="shrink-0 bg-white border-r border-border z-40"
+          style={{ width: SIDEBAR_WIDTH }}
+        />
+        <div className="flex-1 overflow-hidden">
+          <div
+            ref={headerContentRef}
+            style={{ willChange: 'transform' }}
+          >
+            <TimelineHeader sidebarWidth={0} />
+          </div>
+        </div>
       </div>
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar with table names */}
+        {/* Sidebar - uses transform for smooth sync */}
         <div
-          ref={sidebarRef}
-          className="overflow-hidden shrink-0"
+          className="shrink-0 overflow-hidden bg-white border-r border-border z-20"
           style={{ width: SIDEBAR_WIDTH }}
         >
-          <TimelineSidebar width={SIDEBAR_WIDTH} />
+          <div
+            ref={sidebarContentRef}
+            style={{ willChange: 'transform' }}
+          >
+            <TimelineSidebar width={SIDEBAR_WIDTH} />
+          </div>
         </div>
 
         {/* Scrollable grid area */}
@@ -78,7 +160,7 @@ export const Timeline = memo(function Timeline() {
           className="flex-1 overflow-auto"
           onScroll={handleScroll}
         >
-          <TimelineGrid />
+          <TimelineGrid viewport={viewport} />
         </div>
       </div>
     </div>

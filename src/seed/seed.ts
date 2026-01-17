@@ -654,4 +654,232 @@ export const seedReservations: Reservation[] = [
     createdAt: daysAgoAt(1, 14, 0),
     updatedAt: todayAt(20, 30),
   },
+
+  // Additional reservations to reach 50
+  {
+    id: 'RES_041',
+    tableId: 'T1',
+    customer: { name: 'Patricia Campos', phone: '+54 9 11 5555-2222' },
+    partySize: 2,
+    startTime: todayAt(14, 0),
+    endTime: todayAt(15, 30),
+    durationMinutes: 90,
+    status: 'FINISHED',
+    priority: 'STANDARD',
+    source: 'web',
+    createdAt: daysAgoAt(1, 8, 0),
+    updatedAt: todayAt(15, 30),
+  },
+  {
+    id: 'RES_042',
+    tableId: 'T2',
+    customer: { name: 'Rodrigo Paz', phone: '+54 9 11 5555-3333', email: 'rpaz@mail.com' },
+    partySize: 4,
+    startTime: todayAt(14, 30),
+    endTime: todayAt(16, 0),
+    durationMinutes: 90,
+    status: 'FINISHED',
+    priority: 'VIP',
+    notes: 'Regular customer',
+    source: 'phone',
+    createdAt: daysAgoAt(2, 16, 0),
+    updatedAt: todayAt(16, 0),
+  },
+  {
+    id: 'RES_043',
+    tableId: 'T9',
+    customer: { name: 'Monica Vera', phone: '+54 9 11 5555-4444' },
+    partySize: 3,
+    startTime: todayAt(14, 30),
+    endTime: todayAt(16, 0),
+    durationMinutes: 90,
+    status: 'FINISHED',
+    priority: 'STANDARD',
+    source: 'web',
+    createdAt: todayAt(9, 0),
+    updatedAt: todayAt(16, 0),
+  },
+  {
+    id: 'RES_044',
+    tableId: 'T19',
+    customer: { name: 'Esteban Luna', phone: '+54 9 11 5555-5555' },
+    partySize: 2,
+    startTime: todayAt(22, 30),
+    endTime: todayAt(23, 45),
+    durationMinutes: 75,
+    status: 'PENDING',
+    priority: 'STANDARD',
+    source: 'phone',
+    createdAt: todayAt(21, 0),
+    updatedAt: todayAt(21, 0),
+  },
+  {
+    id: 'RES_045',
+    tableId: 'T3',
+    customer: { name: 'Alicia Godoy', phone: '+54 9 11 5555-6666' },
+    partySize: 5,
+    startTime: todayAt(22, 30),
+    endTime: todayAt(23, 45),
+    durationMinutes: 75,
+    status: 'PENDING',
+    priority: 'STANDARD',
+    source: 'web',
+    createdAt: todayAt(20, 30),
+    updatedAt: todayAt(20, 30),
+  },
+  {
+    id: 'RES_046',
+    tableId: 'T17',
+    customer: { name: 'Private Dinner Co', phone: '+54 9 11 5555-7777', email: 'events@private.com' },
+    partySize: 6,
+    startTime: todayAt(13, 0),
+    endTime: todayAt(15, 0),
+    durationMinutes: 120,
+    status: 'FINISHED',
+    priority: 'VIP',
+    notes: 'Confidential business meeting',
+    source: 'web',
+    createdAt: daysAgoAt(5, 10, 0),
+    updatedAt: todayAt(15, 0),
+  },
+  {
+    id: 'RES_047',
+    tableId: 'T20',
+    customer: { name: 'Mariana Ponce', phone: '+54 9 11 5555-8888' },
+    partySize: 2,
+    startTime: todayAt(22, 45),
+    endTime: todayAt(23, 45),
+    durationMinutes: 60,
+    status: 'PENDING',
+    priority: 'STANDARD',
+    source: 'phone',
+    createdAt: todayAt(22, 0),
+    updatedAt: todayAt(22, 0),
+  },
+  {
+    id: 'RES_048',
+    tableId: 'T14',
+    customer: { name: 'Family Reunion Group', phone: '+54 9 11 5555-9999' },
+    partySize: 9,
+    startTime: todayAt(13, 0),
+    endTime: todayAt(15, 30),
+    durationMinutes: 150,
+    status: 'FINISHED',
+    priority: 'LARGE_GROUP',
+    notes: 'Sunday family lunch',
+    source: 'phone',
+    createdAt: daysAgoAt(3, 11, 0),
+    updatedAt: todayAt(15, 30),
+  },
+  {
+    id: 'RES_049',
+    tableId: 'T4',
+    customer: { name: 'Alberto Nunez', phone: '+54 9 11 5555-1010' },
+    partySize: 3,
+    startTime: todayAt(22, 30),
+    endTime: todayAt(23, 45),
+    durationMinutes: 75,
+    status: 'CONFIRMED',
+    priority: 'STANDARD',
+    source: 'web',
+    createdAt: todayAt(19, 30),
+    updatedAt: todayAt(19, 30),
+  },
+  {
+    id: 'RES_050',
+    tableId: 'T11',
+    customer: { name: 'Clara Ibarra', phone: '+54 9 11 5555-1212', email: 'clara.ibarra@email.com' },
+    partySize: 2,
+    startTime: todayAt(23, 0),
+    endTime: todayAt(23, 45),
+    durationMinutes: 45,
+    status: 'PENDING',
+    priority: 'STANDARD',
+    source: 'web',
+    createdAt: todayAt(22, 30),
+    updatedAt: todayAt(22, 30),
+  },
 ];
+
+// Pre-generated test data for stress testing (150 extra reservations for today)
+const TEST_FIRST_NAMES = ['Juan', 'Maria', 'Carlos', 'Ana', 'Pedro', 'Laura', 'Diego', 'Sofia', 'Martin', 'Valentina', 'Lucas', 'Camila', 'Nicolas', 'Isabella', 'Mateo', 'Emma', 'Santiago', 'Mia', 'Sebastian', 'Paula'];
+const TEST_LAST_NAMES = ['Garcia', 'Rodriguez', 'Martinez', 'Lopez', 'Gonzalez', 'Perez', 'Sanchez', 'Romero', 'Torres', 'Flores', 'Rivera', 'Gomez', 'Diaz', 'Reyes', 'Cruz', 'Morales', 'Ortiz', 'Gutierrez', 'Chavez', 'Ramos'];
+const TEST_DURATIONS = [60, 75, 90, 105, 120];
+const TEST_STATUSES: Reservation['status'][] = ['PENDING', 'CONFIRMED', 'SEATED', 'FINISHED'];
+const TEST_PRIORITIES: Reservation['priority'][] = ['STANDARD', 'VIP', 'LARGE_GROUP'];
+
+// Generate 150 test reservations for today (will overlap - that's ok for stress testing)
+function createTestReservations(): Reservation[] {
+  const reservations: Reservation[] = [];
+
+  // Time slots throughout the day (11:00 to 23:00)
+  const timeSlots = [
+    { hour: 11, minute: 0 },
+    { hour: 11, minute: 30 },
+    { hour: 12, minute: 0 },
+    { hour: 12, minute: 30 },
+    { hour: 13, minute: 0 },
+    { hour: 13, minute: 30 },
+    { hour: 14, minute: 0 },
+    { hour: 14, minute: 30 },
+    { hour: 15, minute: 0 },
+    { hour: 15, minute: 30 },
+    { hour: 16, minute: 0 },
+    { hour: 17, minute: 0 },
+    { hour: 18, minute: 0 },
+    { hour: 19, minute: 0 },
+    { hour: 19, minute: 30 },
+    { hour: 20, minute: 0 },
+    { hour: 20, minute: 30 },
+    { hour: 21, minute: 0 },
+    { hour: 21, minute: 30 },
+    { hour: 22, minute: 0 },
+    { hour: 22, minute: 30 },
+    { hour: 23, minute: 0 },
+  ];
+
+  let id = 100; // Start from 100 to avoid collision with seed IDs
+
+  // Distribute reservations across tables and time slots
+  for (let i = 0; i < 150; i++) {
+    const table = seedTables[i % seedTables.length];
+    const slot = timeSlots[i % timeSlots.length];
+
+    const firstName = TEST_FIRST_NAMES[i % TEST_FIRST_NAMES.length];
+    const lastName = TEST_LAST_NAMES[(i * 3) % TEST_LAST_NAMES.length];
+    const durationMinutes = TEST_DURATIONS[i % TEST_DURATIONS.length];
+    const partySize = Math.min(table.capacity.max, Math.max(table.capacity.min, 2 + (i % 4)));
+
+    const startTime = todayAt(slot.hour, slot.minute);
+    const endHour = slot.hour + Math.floor((slot.minute + durationMinutes) / 60);
+    const endMinute = (slot.minute + durationMinutes) % 60;
+    const endTime = todayAt(endHour, endMinute);
+
+    reservations.push({
+      id: `RES_TEST_${String(id).padStart(3, '0')}`,
+      tableId: table.id,
+      customer: {
+        name: `${firstName} ${lastName}`,
+        phone: `+54 9 11 ${1000 + id}-${2000 + id}`,
+        email: i % 2 === 0 ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@test.com` : undefined,
+      },
+      partySize,
+      startTime,
+      endTime,
+      durationMinutes,
+      status: TEST_STATUSES[i % TEST_STATUSES.length],
+      priority: TEST_PRIORITIES[i % TEST_PRIORITIES.length],
+      notes: i % 5 === 0 ? 'Test reservation note' : undefined,
+      source: i % 2 === 0 ? 'web' : 'phone',
+      createdAt: daysAgoAt(1, 10, 0),
+      updatedAt: todayAt(12, 0),
+    });
+
+    id++;
+  }
+
+  return reservations;
+}
+
+// Pre-generated test data - created once at module load
+export const testReservations: Reservation[] = createTestReservations();

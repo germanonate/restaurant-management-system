@@ -11,6 +11,7 @@ import {
   Plus,
   Undo2,
   Redo2,
+  Database,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +65,7 @@ export function Toolbar() {
   const redo = useReservationStore((state) => state.redo);
   const canUndo = useReservationStore((state) => state.canUndo);
   const canRedo = useReservationStore((state) => state.canRedo);
+  const loadTestData = useReservationStore((state) => state.loadTestData);
 
   const { totalCount, filteredCount, createReservation } = useReservations();
 
@@ -382,13 +384,26 @@ export function Toolbar() {
             </Button>
           </div>
 
-          <Button
-            onClick={() => setCreateSheetOpen(true)}
-            className="gap-2 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]"
-          >
-            <Plus className="h-4 w-4" />
-            New Reservation
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="gap-2 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]">
+                <Plus className="h-4 w-4" />
+                New
+                <ChevronDown className="h-4 w-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Reservation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => loadTestData(200)}>
+                <Database className="h-4 w-4 mr-2" />
+                Add Test Data
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -447,14 +462,28 @@ export function Toolbar() {
           </Button>
 
           {/* Create button */}
-          <Button
-            size="sm"
-            onClick={() => setCreateSheetOpen(true)}
-            className="gap-1 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="sr-only sm:not-sr-only">New</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                className="gap-1 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]"
+              >
+                <Plus className="h-4 w-4" />
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Reservation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => loadTestData(200)}>
+                <Database className="h-4 w-4 mr-2" />
+                Add Test Data
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Undo/Redo */}
           <TooltipProvider>

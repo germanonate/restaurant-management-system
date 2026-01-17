@@ -6,7 +6,6 @@ import {
   formatTimeSlot,
   BASE_SLOT_WIDTH,
 } from '@/utils/timeCalculations';
-
 interface TimelineHeaderProps {
   sidebarWidth: number;
 }
@@ -20,9 +19,9 @@ export const TimelineHeader = memo(function TimelineHeader({
   const slotWidth = (BASE_SLOT_WIDTH * zoomLevel) / 100;
   const totalSlots = getTotalSlots();
 
+  // Render ALL time labels - only ~52 elements, not worth virtualizing
   const timeLabels = useMemo(() => {
     const labels: { slot: number; label: string }[] = [];
-    // Show label every 15 minutes (every slot)
     for (let i = 0; i <= totalSlots; i++) {
       const time = slotIndexToTime(i, selectedDate);
       labels.push({ slot: i, label: formatTimeSlot(time) });
@@ -43,7 +42,7 @@ export const TimelineHeader = memo(function TimelineHeader({
         aria-hidden="true"
       />
 
-      {/* Time slots */}
+      {/* Time slots - render all for smooth scrolling */}
       <div
         className="relative h-10"
         style={{ width: totalSlots * slotWidth }}
@@ -62,7 +61,7 @@ export const TimelineHeader = memo(function TimelineHeader({
             {label}
           </div>
         ))}
-        {/* 15-minute vertical lines */}
+        {/* Vertical lines */}
         {timeLabels.map(({ slot }) => (
           <div
             key={`line-${slot}`}

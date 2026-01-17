@@ -2,11 +2,10 @@ import { memo, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useReservationStore } from '@/stores/reservationStore';
-import { getTablesWithSectors } from '@/utils/gridHelpers';
 import type { Sector, Table, UUID } from '@/types/models';
 import { ROW_HEIGHT } from '@/utils/timeCalculations';
 
-const SECTOR_HEADER_HEIGHT = 32; // h-8 = 32px
+const SECTOR_HEADER_HEIGHT = 32;
 
 interface TimelineSidebarProps {
   width: number;
@@ -19,6 +18,25 @@ interface SectorGroupProps {
   onToggleCollapse: () => void;
 }
 
+// Memoized table row component
+const TableRow = memo(function TableRow({ table }: { table: Table }) {
+  return (
+    <div
+      className="flex items-center px-3 border-b border-border bg-white"
+      style={{ height: ROW_HEIGHT }}
+      role="row"
+      aria-label={`${table.name}, capacity ${table.capacity.min}-${table.capacity.max} guests`}
+    >
+      <div className="flex flex-col min-w-0">
+        <span className="text-sm font-medium truncate">{table.name}</span>
+        <span className="text-xs text-muted-foreground">
+          {table.capacity.min}-{table.capacity.max} guests
+        </span>
+      </div>
+    </div>
+  );
+});
+
 const SectorGroup = memo(function SectorGroup({
   sector,
   tables,
@@ -29,7 +47,8 @@ const SectorGroup = memo(function SectorGroup({
     <div role="rowgroup" aria-label={`${sector.name} sector`}>
       {/* Sector header */}
       <div
-        className="flex items-center gap-2 px-2 h-8 bg-muted/50 border-b border-border cursor-pointer hover:bg-muted transition-colors"
+        className="flex items-center gap-2 px-2 bg-muted/50 border-b border-border cursor-pointer hover:bg-muted transition-colors"
+        style={{ height: SECTOR_HEADER_HEIGHT }}
         onClick={onToggleCollapse}
         role="button"
         aria-expanded={!isCollapsed}
@@ -70,22 +89,7 @@ const SectorGroup = memo(function SectorGroup({
       {!isCollapsed && (
         <div id={`sector-${sector.id}-tables`}>
           {tables.map((table) => (
-            <div
-              key={table.id}
-              className="flex items-center px-3 border-b border-border bg-white"
-              style={{ height: ROW_HEIGHT }}
-              role="row"
-              aria-label={`${table.name}, capacity ${table.capacity.min}-${table.capacity.max} guests`}
-            >
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-medium truncate">
-                  {table.name}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {table.capacity.min}-{table.capacity.max} guests
-                </span>
-              </div>
-            </div>
+            <TableRow key={table.id} table={table} />
           ))}
         </div>
       )}
@@ -121,37 +125,22 @@ export const TimelineSidebar = memo(function TimelineSidebar({
     [tables]
   );
 
-  // Calculate total content height to match grid
-  const tablesWithSectors = useMemo(
-    () => getTablesWithSectors(tables, sortedSectors, collapsedSectors),
-    [tables, sortedSectors, collapsedSectors]
-  );
-
-  const contentHeight = useMemo(() => {
-    // Sector headers + visible table rows
-    const sectorHeadersHeight = sortedSectors.length * SECTOR_HEADER_HEIGHT;
-    const tableRowsHeight = tablesWithSectors.length * ROW_HEIGHT;
-    return sectorHeadersHeight + tableRowsHeight;
-  }, [sortedSectors.length, tablesWithSectors.length]);
-
   return (
     <div
-      className="sticky left-0 z-20 bg-white border-r border-border shrink-0 overflow-y-auto scrollbar-hide"
+      className="sticky left-0 z-20 bg-white border-r border-border shrink-0"
       style={{ width }}
       role="rowgroup"
       aria-label="Tables sidebar"
     >
-      <div style={{ minHeight: contentHeight }}>
-        {sortedSectors.map((sector) => (
-          <SectorGroup
-            key={sector.id}
-            sector={sector}
-            tables={getTablesForSector(sector.id)}
-            isCollapsed={collapsedSectors.has(sector.id)}
-            onToggleCollapse={() => toggleSectorCollapse(sector.id)}
-          />
-        ))}
-      </div>
+      {sortedSectors.map((sector) => (
+        <SectorGroup
+          key={sector.id}
+          sector={sector}
+          tables={getTablesForSector(sector.id)}
+          isCollapsed={collapsedSectors.has(sector.id)}
+          onToggleCollapse={() => toggleSectorCollapse(sector.id)}
+        />
+      ))}
     </div>
   );
 });

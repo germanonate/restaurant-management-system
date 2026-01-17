@@ -1,3 +1,4 @@
 export { ReservationBlock } from './ReservationBlock';
 export { ReservationContextMenu } from './ReservationContextMenu';
-export { ReservationSheet } from './ReservationSheet';
+// ReservationSheet is lazy-loaded - import from LazyReservationSheet instead
+export { LazyReservationSheet } from './LazyReservationSheet';

@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useCallback, useMemo } from 'react';
-import { format, parseISO, setHours, setMinutes } from 'date-fns';
+import { format, parseISO, setHours, setMinutes, isSameDay, addMinutes } from 'date-fns';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -9,6 +9,7 @@ import {
   FileText,
   AlertCircle,
   MapPin,
+  Timer,
 } from 'lucide-react';
 import {
   Sheet,
@@ -93,9 +94,15 @@ const DURATION_OPTIONS = [
   { value: 360, label: '6 hours' },
 ];
 
+interface TimeOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
 // Generate time options from START_HOUR to END_HOUR in 15-min increments
-const generateTimeOptions = () => {
-  const options: { value: string; label: string }[] = [];
+const generateTimeOptions = (): TimeOption[] => {
+  const options: TimeOption[] = [];
   for (let hour = START_HOUR; hour < END_HOUR; hour++) {
     for (let minute = 0; minute < 60; minute += SLOT_MINUTES) {
       const timeValue = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
@@ -120,6 +127,7 @@ export const ReservationSheet = memo(function ReservationSheet({
 }: ReservationSheetProps) {
   const tables = useReservationStore((state) => state.tables);
   const sectors = useReservationStore((state) => state.sectors);
+  const reservations = useReservationStore((state) => state.reservations);
   const selectedStoreDate = useReservationStore((state) => state.selectedDate);
   const getTableById = useReservationStore((state) => state.getTableById);
 
@@ -142,13 +150,89 @@ export const ReservationSheet = memo(function ReservationSheet({
   const tableId = reservation?.tableId ?? initialData?.tableId ?? selectedTableId;
   const table = tableId ? getTableById(tableId) : undefined;
 
-  // Group tables by sector for the dropdown
-  const tablesBySector = useMemo(() => {
+  // Get reservations for the selected date (excluding current reservation if editing)
+  const dateReservations = useMemo(() => {
+    return reservations.filter((r) => {
+      if (r.status === 'CANCELLED') return false;
+      if (mode === 'edit' && reservation && r.id === reservation.id) return false;
+      return isSameDay(parseISO(r.startTime), selectedDate);
+    });
+  }, [reservations, selectedDate, mode, reservation]);
+
+  // Check if a time slot conflicts with existing reservations for a table
+  const hasConflict = useCallback(
+    (tableId: UUID, startTime: Date, duration: number) => {
+      const endTime = addMinutes(startTime, duration);
+      return dateReservations.some((r) => {
+        if (r.tableId !== tableId) return false;
+        const rStart = parseISO(r.startTime);
+        const rEnd = parseISO(r.endTime);
+        // Check for overlap
+        return startTime < rEnd && endTime > rStart;
+      });
+    },
+    [dateReservations]
+  );
+
+  // Filter tables by party size capacity
+  const availableTablesBySector = useMemo(() => {
     return sectors.map((sector) => ({
       sector,
-      tables: tables.filter((t) => t.sectorId === sector.id),
-    }));
-  }, [tables, sectors]);
+      tables: tables
+        .filter((t) => t.sectorId === sector.id)
+        .filter((t) => partySize >= t.capacity.min && partySize <= t.capacity.max),
+    })).filter(({ tables: sectorTables }) => sectorTables.length > 0);
+  }, [tables, sectors, partySize]);
+
+  // Filter time options to only show available times for the selected table
+  const availableTimeOptions = useMemo(() => {
+    if (!selectedTableId) return TIME_OPTIONS;
+
+    return TIME_OPTIONS.map((opt) => {
+      const [hours, minutes] = opt.value.split(':').map(Number);
+      const startTime = setMinutes(setHours(selectedDate, hours), minutes);
+      const isConflict = hasConflict(selectedTableId, startTime, durationMinutes);
+      return { ...opt, disabled: isConflict };
+    });
+  }, [selectedTableId, selectedDate, durationMinutes, hasConflict]);
+
+  // Check if selected table has capacity for party size
+  const selectedTableValid = useMemo(() => {
+    if (!selectedTableId) return true;
+    const t = getTableById(selectedTableId);
+    if (!t) return true;
+    return partySize >= t.capacity.min && partySize <= t.capacity.max;
+  }, [selectedTableId, partySize, getTableById]);
+
+  // Real-time validation: check for conflicts when all booking fields are filled
+  const bookingValidation = useMemo(() => {
+    // Only validate if we have all required booking fields
+    const effectiveTableId = selectedTableId ?? initialData?.tableId;
+    if (!effectiveTableId || !selectedTime) {
+      return { isValid: true, error: null };
+    }
+
+    // Check party size vs table capacity
+    const currentTable = getTableById(effectiveTableId);
+    if (currentTable && (partySize < currentTable.capacity.min || partySize > currentTable.capacity.max)) {
+      return {
+        isValid: false,
+        error: `Party size must be between ${currentTable.capacity.min} and ${currentTable.capacity.max} for this table`,
+      };
+    }
+
+    // Check for time conflicts
+    const [hours, minutes] = selectedTime.split(':').map(Number);
+    const startTime = setMinutes(setHours(selectedDate, hours), minutes);
+    if (hasConflict(effectiveTableId, startTime, durationMinutes)) {
+      return {
+        isValid: false,
+        error: 'This time slot conflicts with an existing reservation',
+      };
+    }
+
+    return { isValid: true, error: null };
+  }, [selectedTableId, initialData?.tableId, selectedTime, selectedDate, durationMinutes, partySize, getTableById, hasConflict]);
 
   // Reset form when opening - intentional setState in effect for modal form reset
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -274,18 +358,18 @@ export const ReservationSheet = memo(function ReservationSheet({
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <div className="space-y-5">
-              {/* Error message */}
-              {error && (
+              {/* Error message - show submit error or real-time validation error */}
+              {(error || bookingValidation.error) && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
                   <AlertCircle className="h-4 w-4 shrink-0" />
-                  {error}
+                  {error || bookingValidation.error}
                 </div>
               )}
 
-              {/* Date and Time - only show in create mode or if editable */}
+              {/* Row 1: Date and Party Size */}
               {mode !== 'view' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-2">
                     <Label className="flex items-center gap-2">
                       <CalendarIcon className="h-4 w-4 text-[rgb(255,147,67)]" />
                       Date *
@@ -315,7 +399,112 @@ export const ReservationSheet = memo(function ReservationSheet({
                     </Popover>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor="partySize" className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-[rgb(255,147,67)]" />
+                      Party Size *
+                    </Label>
+                    <Input
+                      id="partySize"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={partySize}
+                      onChange={(e) => {
+                        setPartySize(parseInt(e.target.value) || 1);
+                        // Reset table if it no longer fits the party size
+                        if (selectedTableId) {
+                          const t = getTableById(selectedTableId);
+                          const newSize = parseInt(e.target.value) || 1;
+                          if (t && (newSize < t.capacity.min || newSize > t.capacity.max)) {
+                            setSelectedTableId(null);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Row 2: Duration, Table, and Time */}
+              {mode !== 'view' && (
+                <div className="flex gap-3">
+                  <div className="flex-1 space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Timer className="h-4 w-4 text-[rgb(255,147,67)]" />
+                      Duration
+                    </Label>
+                    <Select
+                      value={durationMinutes.toString()}
+                      onValueChange={(v) => setDurationMinutes(parseInt(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DURATION_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value.toString()}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Table selection - only show in create mode without preset table */}
+                  {mode === 'create' && !initialData?.tableId ? (
+                    <div className="flex-1 space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-[rgb(255,147,67)]" />
+                        Table *
+                      </Label>
+                      <Select
+                        value={selectedTableId ?? ''}
+                        onValueChange={(v) => setSelectedTableId(v as UUID)}
+                      >
+                        <SelectTrigger className={cn(!selectedTableValid && 'border-red-500')}>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTablesBySector.length === 0 ? (
+                            <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                              No tables fit {partySize} guests
+                            </div>
+                          ) : (
+                            availableTablesBySector.map(({ sector, tables: sectorTables }) => (
+                              <div key={sector.id}>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                                  <span
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: sector.color }}
+                                  />
+                                  {sector.name}
+                                </div>
+                                {sectorTables.map((t) => (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.name}
+                                  </SelectItem>
+                                ))}
+                              </div>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    /* Show selected table info if preset or editing */
+                    <div className="flex-1 space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-[rgb(255,147,67)]" />
+                        Table
+                      </Label>
+                      <div className="flex items-center h-9 px-3 bg-muted/50 rounded-md text-sm">
+                        <span className="font-medium truncate">{table?.name}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-2">
                     <Label className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-[rgb(255,147,67)]" />
                       Time *
@@ -328,8 +517,13 @@ export const ReservationSheet = memo(function ReservationSheet({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-60">
-                        {TIME_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
+                        {availableTimeOptions.map((opt) => (
+                          <SelectItem
+                            key={opt.value}
+                            value={opt.value}
+                            disabled={opt.disabled}
+                            className={cn(opt.disabled && 'text-muted-foreground line-through')}
+                          >
                             {opt.label}
                           </SelectItem>
                         ))}
@@ -339,54 +533,7 @@ export const ReservationSheet = memo(function ReservationSheet({
                 </div>
               )}
 
-              {/* Table selection - only show in create mode without preset table */}
-              {mode === 'create' && !initialData?.tableId && (
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-[rgb(255,147,67)]" />
-                    Table *
-                  </Label>
-                  <Select
-                    value={selectedTableId ?? ''}
-                    onValueChange={(v) => setSelectedTableId(v as UUID)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a table" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tablesBySector.map(({ sector, tables: sectorTables }) => (
-                        <div key={sector.id}>
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-2">
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: sector.color }}
-                            />
-                            {sector.name}
-                          </div>
-                          {sectorTables.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name} ({t.capacity.min}-{t.capacity.max} guests)
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Show selected table info if preset */}
-              {(mode === 'edit' || (mode === 'create' && initialData?.tableId)) && table && (
-                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md text-sm">
-                  <MapPin className="h-4 w-4 text-[rgb(255,147,67)]" />
-                  <span className="font-medium">{table.name}</span>
-                  <span className="text-muted-foreground">
-                    ({table.capacity.min}-{table.capacity.max} guests)
-                  </span>
-                </div>
-              )}
-
-              {/* Customer name */}
+              {/* Customer name - full row */}
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-[rgb(255,147,67)]" />
@@ -402,7 +549,7 @@ export const ReservationSheet = memo(function ReservationSheet({
                 />
               </div>
 
-              {/* Phone */}
+              {/* Phone - full row */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-[rgb(255,147,67)]" />
@@ -419,7 +566,7 @@ export const ReservationSheet = memo(function ReservationSheet({
                 />
               </div>
 
-              {/* Email */}
+              {/* Email - full row */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-[rgb(255,147,67)]" />
@@ -435,51 +582,9 @@ export const ReservationSheet = memo(function ReservationSheet({
                 />
               </div>
 
-              {/* Party size and duration */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="partySize">Party Size *</Label>
-                  <Input
-                    id="partySize"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={partySize}
-                    onChange={(e) => setPartySize(parseInt(e.target.value) || 1)}
-                    disabled={mode === 'view'}
-                  />
-                  {(table || (selectedTableId && getTableById(selectedTableId))) && (
-                    <p className="text-xs text-muted-foreground">
-                      Table capacity: {(table || getTableById(selectedTableId!))?.capacity.min}-
-                      {(table || getTableById(selectedTableId!))?.capacity.max}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="duration">Duration</Label>
-                  <Select
-                    value={durationMinutes.toString()}
-                    onValueChange={(v) => setDurationMinutes(parseInt(v))}
-                    disabled={mode === 'view'}
-                  >
-                    <SelectTrigger id="duration">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DURATION_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value.toString()}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Status and Priority */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              {/* Status and Priority - same row */}
+              <div className="flex gap-4">
+                <div className="flex-1 space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={status}
@@ -501,7 +606,7 @@ export const ReservationSheet = memo(function ReservationSheet({
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex-1 space-y-2">
                   <Label htmlFor="priority">Priority</Label>
                   <Select
                     value={priority}

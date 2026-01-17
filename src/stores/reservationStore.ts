@@ -9,7 +9,7 @@ import type {
   FilterState,
   DragState,
 } from '@/types/models';
-import { seedRestaurant, seedSectors, seedTables, seedReservations } from '@/seed/seed';
+import { seedRestaurant, seedSectors, seedTables, seedReservations, testReservations } from '@/seed/seed';
 import { parseISO, isSameDay } from 'date-fns';
 
 interface HistoryEntry {
@@ -59,6 +59,10 @@ interface ReservationStore {
   deleteReservation: (id: UUID) => void;
   updateReservationStatus: (id: UUID, status: ReservationStatus) => void;
   duplicateReservation: (id: UUID) => Reservation | null;
+
+  // Test data
+  testDataLoaded: boolean;
+  loadTestData: () => void;
 
   // Computed
   getFilteredReservations: () => Reservation[];
@@ -115,6 +119,7 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
   collapsedSectors: new Set(),
   selectedReservationId: null,
   dragState: initialDragState,
+  testDataLoaded: false,
 
   // Actions
   setSelectedDate: (date) => set({ selectedDate: date }),
@@ -231,6 +236,17 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
 
     return newReservation;
   },
+
+  // Test data (can only be loaded once)
+  loadTestData: () =>
+    set((state) => {
+      if (state.testDataLoaded) return state;
+      return {
+        ...saveToHistory(state),
+        reservations: [...state.reservations, ...testReservations],
+        testDataLoaded: true,
+      };
+    }),
 
   // Computed
   getFilteredReservations: () => {

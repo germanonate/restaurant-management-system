@@ -18,6 +18,7 @@ export interface KPIValue {
 
 export interface KPIData {
   capacityUtilization: KPIValue;
+  cancelledReservations: KPIValue;
   noShowRate: KPIValue;
   pendingConfirmations: KPIValue;
   averagePartySize: KPIValue;
@@ -43,6 +44,12 @@ function getNoShowStatus(percentage: number): KPIStatus {
 function getPendingStatus(count: number): KPIStatus {
   if (count <= 5) return 'green';
   if (count <= 15) return 'yellow';
+  return 'red';
+}
+
+function getCancelledStatus(count: number): KPIStatus {
+  if (count <= 3) return 'green';
+  if (count <= 10) return 'yellow';
   return 'red';
 }
 
@@ -75,10 +82,10 @@ export function calculateKPIs(
   // Exclude cancelled reservations for most calculations
   const activeReservations = dayReservations.filter((r) => r.status !== 'CANCELLED');
 
-  // 1. Capacity Utilization
+  // 1. Daily Utilization (Total Seat-Time)
+  // Calculate total seat-hours reserved vs total seat-hours available
   const totalCapacity = tables.reduce((sum, t) => sum + t.capacity.max, 0);
-  const totalReservedSeats = activeReservations.reduce((sum, r) => sum + r.partySize, 0);
-  const capacityUtilization = totalCapacity > 0 ? (totalReservedSeats / totalCapacity) * 100 : 0;
+  const dailyUtilization = calculateDailyUtilization(activeReservations, totalCapacity);
 
   // 2. No-Show Rate
   const completedOrNoShow = dayReservations.filter(
@@ -89,32 +96,42 @@ export function calculateKPIs(
     ? (noShows.length / completedOrNoShow.length) * 100
     : 0;
 
-  // 3. Pending Confirmations
+  // 3. Cancelled Reservations
+  const cancelledCount = dayReservations.filter((r) => r.status === 'CANCELLED').length;
+
+  // 4. Pending Confirmations
   const pendingCount = dayReservations.filter((r) => r.status === 'PENDING').length;
 
-  // 4. Average Party Size
+  // 5. Average Party Size
   const avgPartySize = activeReservations.length > 0
     ? activeReservations.reduce((sum, r) => sum + r.partySize, 0) / activeReservations.length
     : 0;
 
-  // 5. Seating Efficiency (average gap between reservations on same table)
+  // 6. Seating Efficiency (average gap between reservations on same table)
   const gapMinutes = calculateAverageGap(activeReservations);
 
   return {
     capacityUtilization: {
-      value: capacityUtilization,
-      formatted: `${capacityUtilization.toFixed(1)}%`,
-      status: getCapacityStatus(capacityUtilization),
-      title: 'Capacity Utilization',
-      description: '% of total seats reserved. Green <70% | Yellow 70-90% | Red >90%',
+      value: dailyUtilization,
+      formatted: `${dailyUtilization.toFixed(1)}%`,
+      status: getCapacityStatus(dailyUtilization),
+      title: 'Daily Utilization',
+      description: 'Total seat-time reserved vs available.',
       unit: '%',
+    },
+    cancelledReservations: {
+      value: cancelledCount,
+      formatted: cancelledCount.toString(),
+      status: getCancelledStatus(cancelledCount),
+      title: 'Cancelled Reservations',
+      description: 'Total reservations cancelled for the day.',
     },
     noShowRate: {
       value: noShowRate,
       formatted: `${noShowRate.toFixed(1)}%`,
       status: getNoShowStatus(noShowRate),
       title: 'No-Show Rate',
-      description: "% of reservations that didn't show up. Green <5% | Yellow 5-15% | Red >15%",
+      description: "% of reservations that didn't show up.",
       unit: '%',
     },
     pendingConfirmations: {
@@ -122,24 +139,48 @@ export function calculateKPIs(
       formatted: pendingCount.toString(),
       status: getPendingStatus(pendingCount),
       title: 'Pending Confirmations',
-      description: 'Number of reservations awaiting confirmation. Green 0-5 | Yellow 6-15 | Red >15',
+      description: 'Number of reservations awaiting confirmation.',
     },
     averagePartySize: {
       value: avgPartySize,
       formatted: avgPartySize.toFixed(1),
       status: getPartySizeStatus(avgPartySize),
       title: 'Average Party Size',
-      description: 'Average guests per reservation. Green ≥4.0 | Yellow 2.5-3.9 | Red <2.5',
+      description: 'Average guests per reservation.',
     },
     seatingEfficiency: {
       value: gapMinutes,
       formatted: `${Math.round(gapMinutes)} min`,
       status: getEfficiencyStatus(gapMinutes),
       title: 'Seating Efficiency',
-      description: 'Average gap time between reservations on same table. Green 15-30min | Yellow 30-45min | Red >45min or <15min',
+      description: 'Average gap time between reservations on same table.',
       unit: 'min',
     },
   };
+}
+
+// Operating hours: 11:00 to 00:00 (midnight) = 13 hours
+const OPERATING_HOURS = 13;
+
+function calculateDailyUtilization(reservations: Reservation[], totalCapacity: number): number {
+  if (reservations.length === 0 || totalCapacity === 0) return 0;
+
+  // Calculate total seat-minutes used by all reservations
+  let totalSeatMinutesUsed = 0;
+
+  for (const res of reservations) {
+    const start = parseISO(res.startTime);
+    const end = parseISO(res.endTime);
+    const durationMinutes = differenceInMinutes(end, start);
+    totalSeatMinutesUsed += res.partySize * durationMinutes;
+  }
+
+  // Total seat-minutes available = capacity * operating hours * 60 minutes
+  const totalSeatMinutesAvailable = totalCapacity * OPERATING_HOURS * 60;
+
+  // Calculate utilization as percentage, capped at 100%
+  const utilization = (totalSeatMinutesUsed / totalSeatMinutesAvailable) * 100;
+  return Math.min(utilization, 100);
 }
 
 function calculateAverageGap(reservations: Reservation[]): number {

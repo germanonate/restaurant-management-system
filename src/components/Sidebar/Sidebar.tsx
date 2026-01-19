@@ -1,5 +1,4 @@
 import { memo, useMemo } from 'react';
-import { format } from 'date-fns';
 import { useReservationStore } from '@/stores/reservationStore';
 import { calculateKPIs } from './utils/kpiCalculations';
 import { KPICard } from './components/KPICard';
@@ -29,17 +28,10 @@ export const Sidebar = memo(function KPISidebar() {
       aria-hidden={!sidebarOpen}
     >
       <div className="p-3 space-y-3">
-        {/* Header */}
-        <div className="pb-2 border-b border-border">
-          <h2 className="text-sm font-semibold text-foreground">Dashboard</h2>
-          <p className="text-xs text-muted-foreground">
-            {format(selectedDate, 'MMM d, yyyy')}
-          </p>
-        </div>
-
         {/* KPI Cards */}
         <div className="space-y-2">
           <KPICard kpi={kpis.capacityUtilization} />
+          <KPICard kpi={kpis.cancelledReservations} />
           <KPICard kpi={kpis.noShowRate} />
           <KPICard kpi={kpis.pendingConfirmations} />
           <KPICard kpi={kpis.averagePartySize} />

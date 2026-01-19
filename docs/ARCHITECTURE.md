@@ -12,12 +12,26 @@ Given the 4-hour time constraint, I leveraged AI-assisted development
 - **React + TypeScript**: Type safety and component reusability
 - **Vite**: Fast dev server and optimized builds
 - **Zustand**: Lightweight state management, easier than Redux for time constraint
-- **@dnd-kit**: Modern, accessible drag-and-drop library
 - **shadcn/ui**: Pre-built accessible components to save time
 - **date-fns**: Lightweight date utilities
 
 ## Key Design Decisions
-1. **Custom Timeline Grid** vs library: Built from scratch for full control...
-2. **State Management**: Zustand for simplicity...
-3. **Rendering Strategy**: CSS Grid + absolute positioning...
-4. **Conflict Detection Algorithm**: ...
+1. **Custom Timeline Grid** vs library: Built from scratch for full control
+2. **State Management**: Zustand for simplicity
+3. **Rendering Strategy**: CSS Grid + absolute positioning
+4. **Custom Drag & Drop**: Native mouse events instead of libraries (see below)
+
+## Drag & Drop Implementation
+
+Custom implementation using native mouse events in `src/components/Timeline/hooks/useDragAndDrop.ts`.
+
+**Operations:**
+- **Create**: Drag on empty grid to select time range → opens reservation form
+- **Move**: Drag reservation block to change time/table
+- **Resize**: Drag block edges to adjust duration
+
+**Key details:**
+- 15-minute slot grid (96 slots/day)
+- Real-time conflict detection with visual feedback
+- Drag state managed in Zustand store
+- Constraints: 30 min to 6 hour duration

@@ -1,4 +1,16 @@
+// Main components
 export { ReservationBlock } from './ReservationBlock';
-export { ReservationContextMenu } from './ReservationContextMenu';
-// ReservationSheet is lazy-loaded - import from LazyReservationSheet instead
-export { LazyReservationSheet } from './LazyReservationSheet';
+export { ReservationContextMenu } from './components/ReservationContextMenu';
+
+// Lazy-loaded sheet
+export { LazyReservationSheet } from './components/LazyReservationSheet';
+export { preloadReservationSheet } from './components/preloadReservationSheet';
+
+// Sub-components
+export { ResizeHandle } from './components/ResizeHandle';
+export { ReservationContent } from './components/ReservationContent';
+export { ReservationTooltip } from './components/ReservationTooltip';
+
+// Utilities and constants
+export * from './utils/reservationCalculations';
+export * from './constants/timeConstants';

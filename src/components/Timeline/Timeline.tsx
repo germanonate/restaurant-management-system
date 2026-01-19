@@ -1,29 +1,24 @@
 import { useRef, useCallback, useEffect, memo, useState, startTransition } from 'react';
-import { TimelineHeader } from './TimelineHeader';
-import { TimelineSidebar } from './TimelineSidebar';
-import { TimelineGrid } from './TimelineGrid';
+import { TimelineHeader } from './components/TimelineHeader';
+import { TimelineSidebar } from './components/TimelineSidebar';
+import { TimelineGrid } from './components/TimelineGrid';
 import { useReservationStore } from '@/stores/reservationStore';
-import { getCurrentTimePosition, BASE_SLOT_WIDTH } from '@/utils/timeCalculations';
+import { getCurrentTimePosition, BASE_SLOT_WIDTH } from './utils/timeCalculations';
+import { SIDEBAR_WIDTH, SKELETON_CONFIG } from './constants/layoutConstants';
+import { createInitialViewport, updateViewportDimensions, type ViewportState } from './constants/types';
 
-const SIDEBAR_WIDTH = 160;
+export type { ViewportState };
 
 // Skeleton for deferred loading
 function TimelineSkeleton() {
   return (
     <div className="flex-1 flex items-center justify-center bg-muted/20">
       <div className="flex flex-col items-center gap-2">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className={`${SKELETON_CONFIG.borderWidth} ${SKELETON_CONFIG.spinnerSize} border-primary border-t-transparent rounded-full ${SKELETON_CONFIG.animation}`} />
         <span className="text-sm text-muted-foreground">Loading timeline...</span>
       </div>
     </div>
   );
-}
-
-export interface ViewportState {
-  scrollLeft: number;
-  scrollTop: number;
-  viewportWidth: number;
-  viewportHeight: number;
 }
 
 export const Timeline = memo(function Timeline() {
@@ -45,12 +40,7 @@ export const Timeline = memo(function Timeline() {
   }, []);
 
   // Viewport state for virtualization (updated less frequently)
-  const [viewport, setViewport] = useState<ViewportState>({
-    scrollLeft: 0,
-    scrollTop: 0,
-    viewportWidth: 0,
-    viewportHeight: 0,
-  });
+  const [viewport, setViewport] = useState<ViewportState>(createInitialViewport());
 
   // Refs for throttling
   const rafRef = useRef<number | null>(null);
@@ -62,10 +52,10 @@ export const Timeline = memo(function Timeline() {
 
     const updateViewportSize = () => {
       if (scrollContainerRef.current) {
+        const dimensions = updateViewportDimensions(scrollContainerRef.current);
         setViewport((prev) => ({
           ...prev,
-          viewportWidth: scrollContainerRef.current!.clientWidth,
-          viewportHeight: scrollContainerRef.current!.clientHeight,
+          ...dimensions,
         }));
       }
     };

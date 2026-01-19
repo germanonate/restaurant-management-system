@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import type { ComponentProps } from 'react';
+import { preloadReservationSheet } from './preloadReservationSheet';
 
 // Lazy load the heavy ReservationSheet component
 const ReservationSheetLazy = lazy(() =>
@@ -8,25 +9,8 @@ const ReservationSheetLazy = lazy(() =>
   }))
 );
 
-// Track if preload has been initiated to prevent multiple loads
-let preloadInitiated = false;
-
-// Preload function - only runs once, deferred to idle time
-export function preloadReservationSheet() {
-  if (preloadInitiated) return;
-  preloadInitiated = true;
-
-  // Use requestIdleCallback if available, otherwise setTimeout
-  const schedulePreload = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 200));
-  schedulePreload(() => {
-    import('./ReservationSheet');
-  });
-}
-
 // Re-export with same props, wrapped in Suspense
-export function LazyReservationSheet(
-  props: ComponentProps<typeof ReservationSheetLazy>
-) {
+export function LazyReservationSheet(props: ComponentProps<typeof ReservationSheetLazy>) {
   // Preload once after initial app render settles
   useEffect(() => {
     preloadReservationSheet();

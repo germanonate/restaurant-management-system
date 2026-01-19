@@ -1,25 +1,21 @@
 import { memo, useCallback, useState, useRef } from 'react';
-import { Users, GripVertical } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useReservationStore } from '@/stores/reservationStore';
 import { useReservationActions } from '@/hooks/useReservationActions';
-import { useDragAndDrop } from '@/hooks/useDragAndDrop';
-import { ReservationContextMenu } from './ReservationContextMenu';
-import { LazyReservationSheet } from './LazyReservationSheet';
-import {
-  getReservationPosition,
-  getReservationWidth,
-  formatTimeRange,
-} from '@/utils/timeCalculations';
-import type { Reservation } from '@/types/models';
-import { RESERVATION_STATUS_COLORS, PRIORITY_LABELS } from '@/types/models';
+import { useDragAndDrop } from '@/components/Timeline/hooks/useDragAndDrop';
+import { ReservationContextMenu } from './components/ReservationContextMenu';
+import { LazyReservationSheet } from './components/LazyReservationSheet';
+import { ResizeHandle } from './components/ResizeHandle';
+import { ReservationContent } from './components/ReservationContent';
+import { ReservationTooltip } from './components/ReservationTooltip';
+import { getReservationPosition, getReservationWidth, formatTimeRange } from '@/components/Timeline/utils/timeCalculations';
+import type { Priority, Reservation, ReservationStatus } from '@/types/models';
+import { RESERVATION_STATUS_COLORS } from '@/types/models';
 import { cn } from '@/lib/utils';
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface ReservationBlockProps {
   reservation: Reservation;
@@ -28,26 +24,64 @@ interface ReservationBlockProps {
   rowHeight: number;
 }
 
-// Custom comparison to prevent unnecessary re-renders
+// ============================================================================
+// Helpers
+// ============================================================================
+
 function arePropsEqual(
   prevProps: ReservationBlockProps,
   nextProps: ReservationBlockProps
 ): boolean {
+  const prev = prevProps.reservation;
+  const next = nextProps.reservation;
+
   return (
-    prevProps.reservation.id === nextProps.reservation.id &&
-    prevProps.reservation.status === nextProps.reservation.status &&
-    prevProps.reservation.startTime === nextProps.reservation.startTime &&
-    prevProps.reservation.endTime === nextProps.reservation.endTime &&
-    prevProps.reservation.durationMinutes === nextProps.reservation.durationMinutes &&
-    prevProps.reservation.customer.name === nextProps.reservation.customer.name &&
-    prevProps.reservation.partySize === nextProps.reservation.partySize &&
-    prevProps.reservation.priority === nextProps.reservation.priority &&
-    prevProps.reservation.tableId === nextProps.reservation.tableId &&
+    prev.id === next.id &&
+    prev.status === next.status &&
+    prev.startTime === next.startTime &&
+    prev.endTime === next.endTime &&
+    prev.durationMinutes === next.durationMinutes &&
+    prev.customer.name === next.customer.name &&
+    prev.partySize === next.partySize &&
+    prev.priority === next.priority &&
+    prev.tableId === next.tableId &&
     prevProps.top === nextProps.top &&
     prevProps.slotWidth === nextProps.slotWidth &&
     prevProps.rowHeight === nextProps.rowHeight
   );
 }
+
+function getBlockStyles(params: {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  statusColor: string;
+  isCancelled: boolean;
+  isBeingDragged: boolean;
+  showConflict: boolean;
+}): React.CSSProperties {
+  const { left, top, width, height, statusColor, isCancelled, isBeingDragged, showConflict } = params;
+
+  return {
+    left,
+    top: top + 4,
+    width: Math.max(width, 40),
+    height: height - 8,
+    backgroundColor: showConflict ? '#FEE2E2' : statusColor,
+    borderColor: showConflict ? undefined : isCancelled ? '#9CA3AF' : statusColor,
+    backgroundImage:
+      isCancelled && !showConflict
+        ? 'repeating-linear-gradient(45deg, #D1D5DB, #D1D5DB 4px, #9CA3AF 4px, #9CA3AF 8px)'
+        : undefined,
+    transform: 'translateZ(0)',
+    willChange: isBeingDragged ? 'transform' : 'auto',
+  };
+}
+
+// ============================================================================
+// Component
+// ============================================================================
 
 export const ReservationBlock = memo(function ReservationBlock({
   reservation,
@@ -57,8 +91,8 @@ export const ReservationBlock = memo(function ReservationBlock({
 }: ReservationBlockProps) {
   const selectedDate = useReservationStore((state) => state.selectedDate);
   const blockRef = useRef<HTMLDivElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Use lightweight actions hook - doesn't subscribe to data, prevents unnecessary re-renders
   const {
     updateReservation,
     deleteReservation,
@@ -70,25 +104,19 @@ export const ReservationBlock = memo(function ReservationBlock({
     cancelReservation,
   } = useReservationActions();
 
-  const {
-    handleMoveDragStart,
-    handleResizeDragStart,
-    dragState,
-    hasConflict,
-  } = useDragAndDrop();
+  const { handleMoveDragStart, handleResizeDragStart, dragState, hasConflict } = useDragAndDrop();
 
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const left = getReservationPosition(
-    reservation.startTime,
-    selectedDate,
-    slotWidth
-  );
+  // Calculate position and dimensions
+  const left = getReservationPosition(reservation.startTime, selectedDate, slotWidth);
   const width = getReservationWidth(reservation.durationMinutes, slotWidth);
-
   const statusColor = RESERVATION_STATUS_COLORS[reservation.status];
   const isCancelled = reservation.status === 'CANCELLED';
 
+  // Drag state
+  const isBeingDragged = dragState.isDragging && dragState.reservationId === reservation.id;
+  const showConflict = isBeingDragged && hasConflict;
+
+  // Event handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
@@ -97,7 +125,6 @@ export const ReservationBlock = memo(function ReservationBlock({
       const rect = blockRef.current?.parentElement?.getBoundingClientRect();
       if (!rect) return;
 
-      // Check if clicking on resize handles
       const blockRect = blockRef.current?.getBoundingClientRect();
       if (blockRect) {
         const relativeX = e.clientX - blockRect.left;
@@ -119,36 +146,55 @@ export const ReservationBlock = memo(function ReservationBlock({
     [reservation.id, reservation.tableId, handleMoveDragStart, handleResizeDragStart]
   );
 
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setSheetOpen(true);
-    },
-    []
-  );
-
-  const handleEdit = useCallback(() => {
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     setSheetOpen(true);
   }, []);
 
-  const handleDelete = useCallback(() => {
-    deleteReservation(reservation.id);
-  }, [reservation.id, deleteReservation]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setSheetOpen(true);
+    }
+  }, []);
 
-  const handleDuplicate = useCallback(() => {
-    duplicateReservation(reservation.id);
-  }, [reservation.id, duplicateReservation]);
+  const handleEdit = useCallback(() => setSheetOpen(true), []);
+  const handleDelete = useCallback(() => deleteReservation(reservation.id), [reservation.id, deleteReservation]);
+  const handleDuplicate = useCallback(() => duplicateReservation(reservation.id), [reservation.id, duplicateReservation]);
 
-  const handleUpdateReservation = useCallback(
-    (data: Parameters<typeof updateReservation>[1]) => {
-      return updateReservation(reservation.id, data);
+  const handleSubmit = useCallback(
+    (data: {
+      customer: { name: string; phone: string; email?: string; notes?: string };
+      partySize: number;
+      durationMinutes: number;
+      status: ReservationStatus;
+      priority: Priority;
+      notes?: string;
+      tableId?: string;
+      startTime?: string;
+    }) => {
+      const result = updateReservation(reservation.id, {
+        ...data,
+        startTime: data.startTime ? new Date(data.startTime) : undefined,
+      });
+      if (result.success) {
+        setSheetOpen(false);
+      }
+      return result;
     },
     [reservation.id, updateReservation]
   );
 
-  const isBeingDragged =
-    dragState.isDragging && dragState.reservationId === reservation.id;
-  const showConflict = isBeingDragged && hasConflict;
+  const blockStyles = getBlockStyles({
+    left,
+    top,
+    width,
+    height: rowHeight,
+    statusColor,
+    isCancelled,
+    isBeingDragged,
+    showConflict,
+  });
 
   return (
     <>
@@ -177,102 +223,29 @@ export const ReservationBlock = memo(function ReservationBlock({
                   isBeingDragged && 'opacity-80 shadow-lg z-50',
                   showConflict && 'border-2 border-red-500 shadow-red-500/50 shadow-lg'
                 )}
-                style={{
-                  left,
-                  top: top + 4,
-                  width: Math.max(width, 40),
-                  height: rowHeight - 8,
-                  backgroundColor: showConflict ? '#FEE2E2' : statusColor,
-                  borderColor: showConflict ? undefined : (isCancelled ? '#9CA3AF' : statusColor),
-                  backgroundImage: isCancelled && !showConflict
-                    ? 'repeating-linear-gradient(45deg, #D1D5DB, #D1D5DB 4px, #9CA3AF 4px, #9CA3AF 8px)'
-                    : undefined,
-                  transform: 'translateZ(0)', // GPU acceleration
-                  willChange: isBeingDragged ? 'transform' : 'auto',
-                }}
+                style={blockStyles}
                 onMouseDown={handleMouseDown}
                 onDoubleClick={handleDoubleClick}
+                onKeyDown={handleKeyDown}
                 role="button"
                 tabIndex={0}
                 aria-label={`${reservation.customer.name}, ${reservation.partySize} guests, ${formatTimeRange(reservation.startTime, reservation.endTime)}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSheetOpen(true);
-                  }
-                }}
               >
-              {/* Left resize handle */}
-              <div
-                className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover:opacity-100 flex items-center justify-center"
-                aria-hidden="true"
-              >
-                <GripVertical className={cn("h-4 w-4", isCancelled ? "text-gray-600" : "text-white/70")} />
-              </div>
-
-              {/* Content */}
-              <div className={cn(
-                "flex items-center gap-1.5 min-w-0 flex-1 pl-2",
-                isCancelled ? "text-gray-700" : "text-white"
-              )}>
-                <Users className="h-3 w-3 shrink-0" aria-hidden="true" />
-                <span className="text-xs font-medium" aria-hidden="true">
-                  {reservation.partySize}
-                </span>
-                <span className="text-sm font-medium truncate">
-                  {reservation.customer.name}
-                </span>
-                {width > 120 && (
-                  <span className="text-xs opacity-80 shrink-0">
-                    {formatTimeRange(reservation.startTime, reservation.endTime)}
-                  </span>
-                )}
-              </div>
-
-              {/* Priority badge */}
-              {reservation.priority !== 'STANDARD' && width > 160 && (
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    "text-xs shrink-0",
-                    isCancelled ? "bg-gray-500/30 text-gray-700" : "bg-white/20 text-white"
-                  )}
-                >
-                  {PRIORITY_LABELS[reservation.priority]}
-                </Badge>
-              )}
-
-              {/* Right resize handle */}
-              <div
-                className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover:opacity-100 flex items-center justify-center"
-                aria-hidden="true"
-              >
-                <GripVertical className={cn("h-4 w-4", isCancelled ? "text-gray-600" : "text-white/70")} />
-              </div>
+                <ResizeHandle position="left" isCancelled={isCancelled} />
+                <ReservationContent
+                  customerName={reservation.customer.name}
+                  partySize={reservation.partySize}
+                  startTime={reservation.startTime}
+                  endTime={reservation.endTime}
+                  priority={reservation.priority}
+                  width={width}
+                  isCancelled={isCancelled}
+                />
+                <ResizeHandle position="right" isCancelled={isCancelled} />
               </div>
             </TooltipTrigger>
           </ReservationContextMenu>
-
-          <TooltipContent side="top" className="max-w-xs">
-            <div className="space-y-1">
-              <p className="font-medium">{reservation.customer.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {reservation.customer.phone}
-              </p>
-              <p className="text-sm">
-                {reservation.partySize} guests •{' '}
-                {formatTimeRange(reservation.startTime, reservation.endTime)}
-              </p>
-              {reservation.notes && (
-                <p className="text-sm text-muted-foreground">
-                  {reservation.notes}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground capitalize">
-                Status: {reservation.status.toLowerCase().replace('_', ' ')}
-              </p>
-            </div>
-          </TooltipContent>
+          <ReservationTooltip reservation={reservation} />
         </Tooltip>
       </TooltipProvider>
 
@@ -281,18 +254,7 @@ export const ReservationBlock = memo(function ReservationBlock({
         onOpenChange={setSheetOpen}
         mode="edit"
         reservation={reservation}
-        onSubmit={(data) => {
-          // Convert startTime string to Date if provided
-          const updateData = {
-            ...data,
-            startTime: data.startTime ? new Date(data.startTime) : undefined,
-          };
-          const result = handleUpdateReservation(updateData);
-          if (result.success) {
-            setSheetOpen(false);
-          }
-          return result;
-        }}
+        onSubmit={handleSubmit}
       />
     </>
   );

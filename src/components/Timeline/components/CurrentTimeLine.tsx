@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from 'react';
 import { useReservationStore } from '@/stores/reservationStore';
-import { getCurrentTimePosition, BASE_SLOT_WIDTH } from '@/utils/timeCalculations';
+import { getCurrentTimePosition, BASE_SLOT_WIDTH } from '../utils/timeCalculations';
 
 export const CurrentTimeLine = memo(function CurrentTimeLine() {
   const selectedDate = useReservationStore((state) => state.selectedDate);

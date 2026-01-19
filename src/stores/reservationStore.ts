@@ -36,6 +36,7 @@ interface ReservationStore {
   collapsedSectors: Set<UUID>;
   selectedReservationId: UUID | null;
   dragState: DragState;
+  sidebarOpen: boolean;
 
   // Actions
   setSelectedDate: (date: Date) => void;
@@ -46,6 +47,7 @@ interface ReservationStore {
   setSelectedReservation: (id: UUID | null) => void;
   setDragState: (state: Partial<DragState>) => void;
   resetDragState: () => void;
+  toggleSidebar: () => void;
 
   // Undo/Redo
   undo: () => void;
@@ -120,6 +122,7 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
   selectedReservationId: null,
   dragState: initialDragState,
   testDataLoaded: false,
+  sidebarOpen: false,
 
   // Actions
   setSelectedDate: (date) => set({ selectedDate: date }),
@@ -152,6 +155,8 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
     })),
 
   resetDragState: () => set({ dragState: initialDragState }),
+
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
   // Undo/Redo
   undo: () =>

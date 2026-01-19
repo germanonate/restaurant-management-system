@@ -4,13 +4,9 @@ import {
   Calendar as CalendarIcon,
   Search,
   X,
-  ZoomIn,
-  ZoomOut,
   Filter,
   ChevronDown,
   Plus,
-  Undo2,
-  Redo2,
   Database,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,20 +33,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useReservationStore } from '@/stores/reservationStore';
 import { useReservationActions } from '@/hooks/useReservationActions';
-import { LazyReservationSheet } from '@/components/ReservationBlock/LazyReservationSheet';
-import type { ReservationStatus, UUID } from '@/types/models';
+import { LazyReservationSheet } from '@/components/ReservationBlock/components/LazyReservationSheet';
+import { UndoRedoControls } from './components/UndoRedoControls';
+import { ZoomControls } from './components/ZoomControls';
+import {
+  getNextZoomLevel,
+  getPreviousZoomLevel,
+  handleSectorToggle as calculateSectorToggle,
+  areAllSectorsSelected,
+} from './constants/toolbarConstants';
+import { computeReservationCounts } from './utils/filterCalculations';
+import type { Priority, ReservationStatus, UUID } from '@/types/models';
 import { STATUS_LABELS } from '@/types/models';
-import { cn } from '@/lib/utils';
-
-const ZOOM_LEVELS = [50, 75, 100, 125, 150];
 
 export function Toolbar() {
   const selectedDate = useReservationStore((state) => state.selectedDate);
@@ -75,62 +71,27 @@ export function Toolbar() {
 
   // Compute counts for selected day
   const { totalCount, filteredCount } = useMemo(() => {
-    let total = 0;
-    let filtered = 0;
-
-    for (const reservation of reservations) {
-      // Date filter - both counts only include selected day
-      const resDate = parseISO(reservation.startTime);
-      if (resDate.toDateString() !== selectedDate.toDateString()) {
-        continue;
-      }
-
-      // Count for total (all reservations for this day)
-      total++;
-
-      // Apply additional filters for filtered count
-      // Sector filter
-      if (filters.sectorIds.length > 0) {
-        const table = tables.find((t) => t.id === reservation.tableId);
-        if (!table || !filters.sectorIds.includes(table.sectorId)) {
-          continue;
-        }
-      }
-
-      // Status filter
-      if (filters.status && reservation.status !== filters.status) {
-        continue;
-      }
-
-      // Search filter
-      if (filters.searchQuery) {
-        const query = filters.searchQuery.toLowerCase();
-        const matchesName = reservation.customer.name.toLowerCase().includes(query);
-        const matchesPhone = reservation.customer.phone.toLowerCase().includes(query);
-        if (!matchesName && !matchesPhone) {
-          continue;
-        }
-      }
-
-      filtered++;
-    }
-
-    return { totalCount: total, filteredCount: filtered };
-  }, [reservations, filters, selectedDate, tables]);
+    return computeReservationCounts(
+      reservations,
+      selectedDate,
+      filters.sectorIds,
+      filters.status,
+      filters.searchQuery,
+      tables
+    );
+  }, [reservations, selectedDate, filters.sectorIds, filters.status, filters.searchQuery, tables]);
 
   const [searchValue, setSearchValue] = useState(filters.searchQuery);
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [createSheetOpen, setCreateSheetOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [mobileDatePickerOpen, setMobileDatePickerOpen] = useState(false);
 
   const handleCreateReservation = useCallback(
     (data: {
       customer: { name: string; phone: string; email?: string; notes?: string };
       partySize: number;
       durationMinutes: number;
-      status: 'PENDING' | 'CONFIRMED' | 'SEATED' | 'FINISHED' | 'NO_SHOW' | 'CANCELLED';
-      priority: 'STANDARD' | 'VIP' | 'LARGE_GROUP';
+      status: ReservationStatus;
+      priority: Priority;
       notes?: string;
       tableId?: UUID;
       startTime?: string;
@@ -178,43 +139,21 @@ export function Toolbar() {
 
   const handleSectorToggle = useCallback(
     (sectorId: UUID) => {
-      let newSectorIds: UUID[];
-
-      if (filters.sectorIds.length === 0) {
-        // Currently showing all - uncheck means select all except this one
-        newSectorIds = sectors.filter((s) => s.id !== sectorId).map((s) => s.id);
-      } else if (filters.sectorIds.includes(sectorId)) {
-        // Remove from selection
-        newSectorIds = filters.sectorIds.filter((id) => id !== sectorId);
-        // If we unchecked the last one, clear filter to show all
-        if (newSectorIds.length === 0) {
-          newSectorIds = [];
-        }
-      } else {
-        // Add to selection
-        newSectorIds = [...filters.sectorIds, sectorId];
-        // If all are now selected, clear filter to show all
-        if (newSectorIds.length === sectors.length) {
-          newSectorIds = [];
-        }
-      }
-
+      const newSectorIds = calculateSectorToggle(filters.sectorIds, sectorId, sectors);
       setFilters({ sectorIds: newSectorIds });
     },
     [filters.sectorIds, sectors, setFilters]
   );
 
   const handleSelectAllSectors = useCallback(() => {
-    // If all are selected (or none selected showing all), clear the filter
-    // Otherwise, select all sectors
-    if (filters.sectorIds.length === 0 || filters.sectorIds.length === sectors.length) {
+    if (areAllSectorsSelected(filters.sectorIds, sectors.length)) {
       setFilters({ sectorIds: [] });
     } else {
       setFilters({ sectorIds: sectors.map((s) => s.id) });
     }
-  }, [filters.sectorIds.length, sectors, setFilters]);
+  }, [filters.sectorIds, sectors, setFilters]);
 
-  const allSectorsSelected = filters.sectorIds.length === 0 || filters.sectorIds.length === sectors.length;
+  const allSectorsSelected = areAllSectorsSelected(filters.sectorIds, sectors.length);
 
   const handleStatusChange = useCallback(
     (value: string) => {
@@ -231,23 +170,23 @@ export function Toolbar() {
   }, [clearFilters]);
 
   const handleZoomIn = useCallback(() => {
-    const currentIndex = ZOOM_LEVELS.indexOf(zoomLevel);
-    if (currentIndex < ZOOM_LEVELS.length - 1) {
-      setZoomLevel(ZOOM_LEVELS[currentIndex + 1]);
+    const nextZoom = getNextZoomLevel(zoomLevel);
+    if (nextZoom !== zoomLevel) {
+      setZoomLevel(nextZoom);
     }
   }, [zoomLevel, setZoomLevel]);
 
   const handleZoomOut = useCallback(() => {
-    const currentIndex = ZOOM_LEVELS.indexOf(zoomLevel);
-    if (currentIndex > 0) {
-      setZoomLevel(ZOOM_LEVELS[currentIndex - 1]);
+    const prevZoom = getPreviousZoomLevel(zoomLevel);
+    if (prevZoom !== zoomLevel) {
+      setZoomLevel(prevZoom);
     }
   }, [zoomLevel, setZoomLevel]);
 
   return (
     <div className="flex flex-col gap-2 px-4 py-3 border-b border-border bg-white shrink-0">
       {/* Desktop layout */}
-      <div className="hidden md:flex items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Date picker */}
           <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
@@ -372,66 +311,18 @@ export function Toolbar() {
 
         {/* Undo/Redo, Zoom controls and Create button */}
         <div className="flex items-center gap-3">
-          <TooltipProvider>
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={undo}
-                    disabled={!canUndo()}
-                    aria-label="Undo"
-                  >
-                    <Undo2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Undo</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={redo}
-                    disabled={!canRedo()}
-                    aria-label="Redo"
-                  >
-                    <Redo2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Redo</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
+          <UndoRedoControls
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo()}
+            canRedo={canRedo()}
+          />
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleZoomOut}
-              disabled={zoomLevel === ZOOM_LEVELS[0]}
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium w-12 text-center">
-              {zoomLevel}%
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleZoomIn}
-              disabled={zoomLevel === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
-              aria-label="Zoom in"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-          </div>
+          <ZoomControls
+            zoomLevel={zoomLevel}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -457,254 +348,6 @@ export function Toolbar() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
-
-      {/* Mobile layout */}
-      <div className="flex md:hidden flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          {/* Date picker */}
-          <Popover open={mobileDatePickerOpen} onOpenChange={setMobileDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start text-left font-normal gap-2 flex-1"
-                aria-label={`Selected date: ${format(selectedDate, 'PPP')}`}
-              >
-                <CalendarIcon className="h-4 w-4 text-[rgb(255,147,67)]" />
-                {format(selectedDate, 'PP')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <LazyCalendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => {
-                  if (date) {
-                    setSelectedDate(date);
-                    setMobileDatePickerOpen(false);
-                  }
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-
-          {/* Filters toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-            className={cn(
-              'gap-1',
-              hasActiveFilters && 'border-[rgb(255,147,67)]'
-            )}
-          >
-            <Filter className="h-4 w-4 text-[rgb(255,147,67)]" />
-            {hasActiveFilters && (
-              <Badge
-                variant="secondary"
-                className="bg-[rgb(255,147,67)] text-white text-xs px-1"
-              >
-                {(filters.sectorIds.length > 0 ? 1 : 0) +
-                  (filters.status ? 1 : 0) +
-                  (filters.searchQuery ? 1 : 0)}
-              </Badge>
-            )}
-          </Button>
-
-          {/* Create button */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                className="gap-1 bg-[rgb(255,147,67)] hover:bg-[rgb(235,127,47)]"
-              >
-                <Plus className="h-4 w-4" />
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setCreateSheetOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Reservation
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => loadTestData()}
-                disabled={testDataLoaded}
-              >
-                <Database className="h-4 w-4 mr-2" />
-                {testDataLoaded ? 'Test Data Added' : 'Add Test Data'}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Undo/Redo */}
-          <TooltipProvider>
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={undo}
-                    disabled={!canUndo()}
-                    aria-label="Undo"
-                  >
-                    <Undo2 className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Undo</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={redo}
-                    disabled={!canRedo()}
-                    aria-label="Redo"
-                  >
-                    <Redo2 className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Redo</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleZoomOut}
-              disabled={zoomLevel === ZOOM_LEVELS[0]}
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="h-3 w-3" />
-            </Button>
-            <span className="text-xs font-medium w-8 text-center">
-              {zoomLevel}%
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleZoomIn}
-              disabled={zoomLevel === ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
-              aria-label="Zoom in"
-            >
-              <ZoomIn className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Collapsible filters */}
-        {isFiltersOpen && (
-          <div className="flex flex-col gap-2 pt-2 border-t border-border">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search name or phone..."
-                value={searchValue}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-9"
-                aria-label="Search reservations"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {/* Sector filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex-1 gap-1">
-                    Sectors
-                    {filters.sectorIds.length > 0 && (
-                      <Badge
-                        variant="secondary"
-                        className="ml-1 bg-[rgb(255,147,67)] text-white text-xs px-1"
-                      >
-                        {filters.sectorIds.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
-                  <DropdownMenuItem
-                    onClick={handleSelectAllSectors}
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {allSectorsSelected ? 'Deselect All' : 'Select All'}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {sectors.map((sector) => (
-                    <DropdownMenuCheckboxItem
-                      key={sector.id}
-                      checked={filters.sectorIds.length === 0 || filters.sectorIds.includes(sector.id)}
-                      onCheckedChange={() => handleSectorToggle(sector.id)}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      <span
-                        className="w-3 h-3 rounded-full mr-2"
-                        style={{ backgroundColor: sector.color }}
-                      />
-                      {sector.name}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Status filter */}
-              <Select
-                value={filters.status ?? 'all'}
-                onValueChange={handleStatusChange}
-              >
-                <SelectTrigger className="flex-1" aria-label="Filter by status">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {(Object.keys(STATUS_LABELS) as ReservationStatus[]).map(
-                    (status) => (
-                      <SelectItem key={status} value={status}>
-                        {STATUS_LABELS[status]}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Results and clear */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Showing {filteredCount} of {totalCount}
-              </span>
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearFilters}
-                  className="gap-1 text-muted-foreground"
-                >
-                  <X className="h-4 w-4" />
-                  Clear all
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Create Reservation Sheet */}

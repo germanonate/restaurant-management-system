@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useReservationStore } from '@/stores/reservationStore';
-import { useConflictDetection } from './useConflictDetection';
+import { useConflictDetection } from '../../../hooks/useConflictDetection';
 import {
   snapToSlotIndex,
   slotIndexToTime,
@@ -8,7 +8,7 @@ import {
   clampSlotIndex,
   timeToSlotIndex,
   BASE_SLOT_WIDTH,
-} from '@/utils/timeCalculations';
+} from '../utils/timeCalculations';
 import type { UUID, DragState } from '@/types/models';
 import { addMinutes } from 'date-fns';
 

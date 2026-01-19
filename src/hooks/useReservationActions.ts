@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useReservationStore } from '@/stores/reservationStore';
-import { useConflictDetection } from './useConflictDetection';
+import { useConflictDetection } from '@/hooks/useConflictDetection';
 import type { Reservation, UUID, ReservationStatus, Customer, Priority } from '@/types/models';
 import { addMinutes } from 'date-fns';
 

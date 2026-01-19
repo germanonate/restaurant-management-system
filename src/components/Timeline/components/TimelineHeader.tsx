@@ -5,7 +5,7 @@ import {
   slotIndexToTime,
   formatTimeSlot,
   BASE_SLOT_WIDTH,
-} from '@/utils/timeCalculations';
+} from '../utils/timeCalculations';
 interface TimelineHeaderProps {
   sidebarWidth: number;
 }

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useReservationStore } from '@/stores/reservationStore';
-import { checkReservationConflict, findAlternativeTables, findAlternativeTimeSlots } from '@/utils/gridHelpers';
+import { checkReservationConflict, findAlternativeTables, findAlternativeTimeSlots } from '../components/Timeline/utils/gridHelpers';
 import type { Reservation, UUID, ConflictCheck, Table } from '@/types/models';
 import { parseISO } from 'date-fns';
 

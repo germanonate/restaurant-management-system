@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useReservationStore } from '@/stores/reservationStore';
 import type { Sector, Table, UUID } from '@/types/models';
-import { BASE_ROW_HEIGHT } from '@/utils/timeCalculations';
+import { BASE_ROW_HEIGHT } from '../utils/timeCalculations';
 
 const BASE_SECTOR_HEADER_HEIGHT = 32;
 

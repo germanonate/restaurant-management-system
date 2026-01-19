@@ -143,3 +143,21 @@ export function getCurrentTimePosition(referenceDate: Date, slotWidth: number, s
   const minutesFromStart = differenceInMinutes(simulatedNow, operatingStart);
   return (minutesFromStart / SLOT_MINUTES) * slotWidth;
 }
+
+export interface TimeOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+// Generate time options from START_HOUR to END_HOUR in 15-min increments
+export function generateTimeOptions(): TimeOption[] {
+  const options: TimeOption[] = [];
+  for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+    for (let minute = 0; minute < 60; minute += SLOT_MINUTES) {
+      const timeValue = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      options.push({ value: timeValue, label: timeValue });
+    }
+  }
+  return options;
+}

@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useCallback, useMemo } from 'react';
-import { format, parseISO, setHours, setMinutes, isSameDay, addMinutes } from 'date-fns';
+import { format, parseISO, setHours, setMinutes } from 'date-fns';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -42,7 +42,16 @@ import type {
 } from '@/types/models';
 import { STATUS_LABELS, PRIORITY_LABELS } from '@/types/models';
 import { cn } from '@/lib/utils';
-import { START_HOUR, END_HOUR, SLOT_MINUTES } from '@/utils/timeCalculations';
+import { START_HOUR, END_HOUR, SLOT_MINUTES } from '@/components/Timeline/utils/timeCalculations';
+import { DURATION_OPTIONS, MIN_DURATION, MAX_DURATION } from '@/constants/reservationConstants';
+import {
+  generateReservationTimeOptions,
+} from '../constants/timeConstants';
+import {
+  getDateReservations,
+  hasTimeConflict,
+  isTableCapacityValid,
+} from '../utils/reservationCalculations';
 
 interface ReservationSheetProps {
   open: boolean;
@@ -67,55 +76,7 @@ interface ReservationSheetProps {
   }) => { success: boolean; error?: string } | void;
 }
 
-// Duration options: 15-minute increments, min 30 min, max 6 hours (360 min)
-const DURATION_OPTIONS = [
-  { value: 30, label: '30 min' },
-  { value: 45, label: '45 min' },
-  { value: 60, label: '1 hour' },
-  { value: 75, label: '1h 15min' },
-  { value: 90, label: '1h 30min' },
-  { value: 105, label: '1h 45min' },
-  { value: 120, label: '2 hours' },
-  { value: 135, label: '2h 15min' },
-  { value: 150, label: '2h 30min' },
-  { value: 165, label: '2h 45min' },
-  { value: 180, label: '3 hours' },
-  { value: 195, label: '3h 15min' },
-  { value: 210, label: '3h 30min' },
-  { value: 225, label: '3h 45min' },
-  { value: 240, label: '4 hours' },
-  { value: 255, label: '4h 15min' },
-  { value: 270, label: '4h 30min' },
-  { value: 285, label: '4h 45min' },
-  { value: 300, label: '5 hours' },
-  { value: 315, label: '5h 15min' },
-  { value: 330, label: '5h 30min' },
-  { value: 345, label: '5h 45min' },
-  { value: 360, label: '6 hours' },
-];
-
-interface TimeOption {
-  value: string;
-  label: string;
-  disabled?: boolean;
-}
-
-// Generate time options from START_HOUR to END_HOUR in 15-min increments
-const generateTimeOptions = (): TimeOption[] => {
-  const options: TimeOption[] = [];
-  for (let hour = START_HOUR; hour < END_HOUR; hour++) {
-    for (let minute = 0; minute < 60; minute += SLOT_MINUTES) {
-      const timeValue = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      options.push({ value: timeValue, label: timeValue });
-    }
-  }
-  return options;
-};
-
-const TIME_OPTIONS = generateTimeOptions();
-
-const MIN_DURATION = 30;
-const MAX_DURATION = 360;
+const TIME_OPTIONS = generateReservationTimeOptions(START_HOUR, END_HOUR, SLOT_MINUTES);
 
 export const ReservationSheet = memo(function ReservationSheet({
   open,
@@ -152,24 +113,17 @@ export const ReservationSheet = memo(function ReservationSheet({
 
   // Get reservations for the selected date (excluding current reservation if editing)
   const dateReservations = useMemo(() => {
-    return reservations.filter((r) => {
-      if (r.status === 'CANCELLED') return false;
-      if (mode === 'edit' && reservation && r.id === reservation.id) return false;
-      return isSameDay(parseISO(r.startTime), selectedDate);
-    });
+    return getDateReservations(
+      reservations,
+      selectedDate,
+      mode === 'edit' && reservation ? reservation.id : undefined
+    );
   }, [reservations, selectedDate, mode, reservation]);
 
   // Check if a time slot conflicts with existing reservations for a table
   const hasConflict = useCallback(
     (tableId: UUID, startTime: Date, duration: number) => {
-      const endTime = addMinutes(startTime, duration);
-      return dateReservations.some((r) => {
-        if (r.tableId !== tableId) return false;
-        const rStart = parseISO(r.startTime);
-        const rEnd = parseISO(r.endTime);
-        // Check for overlap
-        return startTime < rEnd && endTime > rStart;
-      });
+      return hasTimeConflict(tableId, startTime, duration, dateReservations);
     },
     [dateReservations]
   );
@@ -200,8 +154,7 @@ export const ReservationSheet = memo(function ReservationSheet({
   const selectedTableValid = useMemo(() => {
     if (!selectedTableId) return true;
     const t = getTableById(selectedTableId);
-    if (!t) return true;
-    return partySize >= t.capacity.min && partySize <= t.capacity.max;
+    return isTableCapacityValid(t?.capacity, partySize);
   }, [selectedTableId, partySize, getTableById]);
 
   // Real-time validation: check for conflicts when all booking fields are filled
@@ -214,10 +167,10 @@ export const ReservationSheet = memo(function ReservationSheet({
 
     // Check party size vs table capacity
     const currentTable = getTableById(effectiveTableId);
-    if (currentTable && (partySize < currentTable.capacity.min || partySize > currentTable.capacity.max)) {
+    if (!isTableCapacityValid(currentTable?.capacity, partySize)) {
       return {
         isValid: false,
-        error: `Party size must be between ${currentTable.capacity.min} and ${currentTable.capacity.max} for this table`,
+        error: `Party size must be between ${currentTable?.capacity.min} and ${currentTable?.capacity.max} for this table`,
       };
     }
 
@@ -296,9 +249,9 @@ export const ReservationSheet = memo(function ReservationSheet({
       }
 
       const currentTable = selectedTableId ? getTableById(selectedTableId) : table;
-      if (currentTable && (partySize < currentTable.capacity.min || partySize > currentTable.capacity.max)) {
+      if (!isTableCapacityValid(currentTable?.capacity, partySize)) {
         setError(
-          `Party size must be between ${currentTable.capacity.min} and ${currentTable.capacity.max} for this table`
+          `Party size must be between ${currentTable?.capacity.min} and ${currentTable?.capacity.max} for this table`
         );
         return;
       }
@@ -416,7 +369,7 @@ export const ReservationSheet = memo(function ReservationSheet({
                         if (selectedTableId) {
                           const t = getTableById(selectedTableId);
                           const newSize = parseInt(e.target.value) || 1;
-                          if (t && (newSize < t.capacity.min || newSize > t.capacity.max)) {
+                          if (!isTableCapacityValid(t?.capacity, newSize)) {
                             setSelectedTableId(null);
                           }
                         }

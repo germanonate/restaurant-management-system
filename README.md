@@ -1,73 +1,98 @@
-# React + TypeScript + Vite
+# Restaurant Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern, full-featured restaurant reservation management system built with React and TypeScript. Features a visual timeline interface for managing table reservations, drag-and-drop scheduling, conflict detection, and real-time availability tracking.
 
-Currently, two official plugins are available:
+## 🔗 Quick Links
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **[Setup Guide](https://github.com/germanonate/restaurant-management-system#setup)** - Get started locally
+- **[Live Demo](https://restaurant-management-system-9a2.pages.dev/)** - View the application
+- **[Loom Demo](https://www.loom.com/share/your-loom-video-id)** - Watch a walkthrough
 
-## React Compiler
+## 📋 Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Before you begin, ensure you have the following installed:
 
-## Expanding the ESLint configuration
+- **Node.js**: v18.0.0 or higher
+- **pnpm**: v8.0.0 or higher (install with `npm install -g pnpm`)
+- **Git**: For cloning the repository
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🚀 Setup
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 1. Clone the Repository
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/germanonate/restaurant-management-system.git
+cd restaurant-management-system
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Install Dependencies
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+pnpm install
+```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 3. Development Server
+
+Start the development server with hot reload:
+
+```bash
+pnpm dev
+```
+
+The application will be available at `http://localhost:5173`
+
+### 4. Build for Production
+
+```bash
+pnpm build
+```
+
+### 5. Preview Production Build
+
+```bash
+pnpm preview
+```
+
+## 🛠 Tech Stack
+
+- **React** 19+ with TypeScript (strict mode)
+- **Vite** - Next generation frontend tooling
+- **Tailwind CSS** - Utility-first CSS framework
+- **shadcn/ui** - High-quality accessible components
+- **@dnd-kit** - Modern drag-and-drop library
+- **Zustand** - Lightweight state management
+- **date-fns** - Date/time utilities
+- **lucide-react** - Icon library
+
+## ✨ Key Features
+
+- **Visual Timeline Grid** - Interactive 15-minute slot timeline (11 AM - 12 AM)
+- **Reservation Management** - Create, edit, move, and delete reservations
+- **Drag & Drop** - Intuitive drag-to-create and drag-to-move functionality
+- **Conflict Detection** - Real-time detection of overlapping reservations
+- **Status Tracking** - Support for multiple reservation statuses (Pending, Confirmed, Seated, Finished, No-Show, Cancelled)
+- **Priority Levels** - Standard, VIP, and Large Group classifications
+- **Filtering & Search** - Filter by sector, status, and search by customer
+- **Zoom Controls** - 5 zoom levels (50% - 150%)
+- **Responsive Design** - Fully responsive for desktop, tablet, and mobile
+- **Real-time Current Time Indicator** - Vertical line showing current time
+
+## 📖 Available Scripts
+
+- `pnpm dev` - Start development server
+- `pnpm build` - Build for production
+- `pnpm preview` - Preview production build
+- `pnpm lint` - Run ESLint
+
+## 📱 Browser Support
+
+- Chrome (latest)
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 ```

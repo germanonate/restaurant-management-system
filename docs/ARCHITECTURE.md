@@ -35,3 +35,47 @@ Custom implementation using native mouse events in `src/components/Timeline/hook
 - Real-time conflict detection with visual feedback
 - Drag state managed in Zustand store
 - Constraints: 30 min to 6 hour duration
+
+## Coordinate Transforms
+
+The timeline converts between three coordinate systems:
+
+```
+Time (Date) ←→ Slot Index ←→ Pixel Position
+```
+
+**Core functions** in `src/components/Timeline/utils/timeCalculations.ts`:
+
+| Function | Purpose |
+|----------|---------|
+| `timeToSlotIndex(time, date)` | Date → slot index (0-95) |
+| `slotIndexToTime(slot, date)` | Slot index → Date |
+| `snapToSlotIndex(px, slotWidth)` | Pixel → nearest slot index |
+| `getReservationPosition(startTime, date, slotWidth)` | ISO time → pixel X position |
+
+**Example:** For a reservation at 14:30 on a day with 11:00 start:
+- Minutes from start: 210 min (3.5 hours)
+- Slot index: 210 / 15 = 14
+- Pixel position: 14 × slotWidth
+
+## Conflict Detection
+
+Detects overlapping reservations on the same table. Located in `src/components/Timeline/utils/gridHelpers.ts`.
+
+**Algorithm:**
+```
+For each existing reservation on the same table:
+  1. Skip if cancelled
+  2. Check interval overlap: newStart < existingEnd AND newEnd > existingStart
+  3. If overlap → conflict
+```
+
+**Usage:**
+- Real-time validation during drag operations
+- Form validation before saving
+- Visual feedback (red highlight) when conflict detected
+
+The `useConflictDetection` hook (`src/hooks/useConflictDetection.ts`) provides:
+- `checkConflict()` - Returns conflict status and conflicting IDs
+- `getConflictResolutions()` - Suggests alternative tables/times
+- `hasConflictingReservations()` - Batch conflict check

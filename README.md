@@ -2,11 +2,13 @@
 
 A modern, full-featured restaurant reservation management system built with React and TypeScript. Features a visual timeline interface for managing table reservations, drag-and-drop scheduling, conflict detection, and real-time availability tracking.
 
+- **[Architecture Docs](./docs/ARCHITECTURE.md)** - Design decisions, algorithms, and technical details
+- **[Initial Prompt](./docs/DEVELOPMENT.md)** - Full details on the initial prompt used to start from scratch this project.
+
 ## 🔗 Quick Links
 
 - **[Setup Guide](https://github.com/germanonate/restaurant-management-system#setup)** - Get started locally
 - **[Live Demo](https://restaurant-management-system-9a2.pages.dev/)** - View the application
-- **[Loom Demo](https://www.loom.com/share/your-loom-video-id)** - Watch a walkthrough
 
 ## 📋 Prerequisites
 
@@ -59,9 +61,9 @@ pnpm preview
 - **Vite** - Next generation frontend tooling
 - **Tailwind CSS** - Utility-first CSS framework
 - **shadcn/ui** - High-quality accessible components
-- **@dnd-kit** - Modern drag-and-drop library
 - **Zustand** - Lightweight state management
 - **date-fns** - Date/time utilities
+- **Vitest** - Unit testing framework
 - **lucide-react** - Icon library
 
 ## ✨ Key Features
@@ -83,16 +85,18 @@ pnpm preview
 - `pnpm build` - Build for production
 - `pnpm preview` - Preview production build
 - `pnpm lint` - Run ESLint
+- `pnpm test` - Run unit tests
+- `pnpm test:coverage` - Run tests with coverage report
 
 ## 📱 Browser Support
 
 - Chrome (latest)
 
-## 📝 License
+## Known Limitations
 
-This project is licensed under the MIT License.
+- **Multi-select**: Not implemented.
+- **Browser support**: Only tested in Google Chrome.
+- **Accessibility**: 12 Axe DevTools violations were reported, all related to color contrast. They were considered minor and deprioritized due to time constraints.
+- **Auto-Scheduling Assistant**: A custom implementation was developed. Based on the selected values for Date, Table, and Time, the system automatically validates availability and only displays options where a reservation is possible. Options that would result in an invalid reservation cannot be selected.
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 ```

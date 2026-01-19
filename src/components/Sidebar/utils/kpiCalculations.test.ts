@@ -14,7 +14,7 @@ const createReservation = (overrides: Partial<Reservation> = {}): Reservation =>
   endTime: '2024-01-15T14:00:00',
   durationMinutes: 120,
   status: 'CONFIRMED',
-  priority: 'NORMAL',
+  priority: 'STANDARD',
   createdAt: '2024-01-01T00:00:00',
   updatedAt: '2024-01-01T00:00:00',
   ...overrides,
@@ -25,6 +25,7 @@ const createTable = (overrides: Partial<Table> = {}): Table => ({
   name: 'Table 1',
   sectorId: 'sector-1',
   capacity: { min: 2, max: 4 },
+  sortOrder: 1,
   ...overrides,
 });
 

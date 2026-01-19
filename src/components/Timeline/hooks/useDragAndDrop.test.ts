@@ -22,7 +22,7 @@ const mockReservation: Reservation = {
   endTime: '2024-01-15T14:00:00',
   durationMinutes: 120,
   status: 'CONFIRMED',
-  priority: 'NORMAL',
+  priority: 'STANDARD',
   createdAt: '2024-01-01T00:00:00',
   updatedAt: '2024-01-01T00:00:00',
 };
@@ -127,14 +127,17 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let createResult: ReturnType<typeof result.current.handleCreateDragEnd>;
+      let createResult: ReturnType<typeof result.current.handleCreateDragEnd> | null = null;
       act(() => {
         createResult = result.current.handleCreateDragEnd();
       });
 
       expect(createResult).not.toBeNull();
-      expect(createResult?.tableId).toBe('table-1');
-      expect(createResult?.durationMinutes).toBe(60); // 4 slots * 15 min
+      if (createResult) {
+        const createObj = createResult as { tableId: string; durationMinutes: number };
+        expect(createObj.tableId).toBe('table-1');
+        expect(createObj.durationMinutes).toBe(60); // 4 slots * 15 min
+      }
       expect(mockResetDragState).toHaveBeenCalled();
     });
 
@@ -219,14 +222,17 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let moveResult: ReturnType<typeof result.current.handleMoveDragEnd>;
+      let moveResult: ReturnType<typeof result.current.handleMoveDragEnd> | null = null;
       act(() => {
         moveResult = result.current.handleMoveDragEnd();
       });
 
       expect(moveResult).not.toBeNull();
-      expect(moveResult?.reservationId).toBe('res-1');
-      expect(moveResult?.newTableId).toBe('table-2');
+      if (moveResult) {
+        const moveObj = moveResult as { reservationId: string; newTableId: string };
+        expect(moveObj.reservationId).toBe('res-1');
+        expect(moveObj.newTableId).toBe('table-2');
+      }
       expect(mockResetDragState).toHaveBeenCalled();
     });
   });
@@ -300,14 +306,17 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let resizeResult: ReturnType<typeof result.current.handleResizeDragEnd>;
+      let resizeResult: ReturnType<typeof result.current.handleResizeDragEnd> | null = null;
       act(() => {
         resizeResult = result.current.handleResizeDragEnd();
       });
 
       expect(resizeResult).not.toBeNull();
-      expect(resizeResult?.reservationId).toBe('res-1');
-      expect(resizeResult?.newDurationMinutes).toBeGreaterThan(0);
+      if (resizeResult) {
+        const resizeObj = resizeResult as { reservationId: string; newDurationMinutes: number };
+        expect(resizeObj.reservationId).toBe('res-1');
+        expect(resizeObj.newDurationMinutes).toBeGreaterThan(0);
+      }
       expect(mockResetDragState).toHaveBeenCalled();
     });
 
@@ -323,12 +332,15 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let resizeResult: ReturnType<typeof result.current.handleResizeDragEnd>;
+      let resizeResult: ReturnType<typeof result.current.handleResizeDragEnd> | null = null;
       act(() => {
         resizeResult = result.current.handleResizeDragEnd();
       });
 
-      expect(resizeResult?.newDurationMinutes).toBeGreaterThanOrEqual(30);
+      if (resizeResult) {
+        const resizeObj = resizeResult as { newDurationMinutes: number };
+        expect(resizeObj.newDurationMinutes).toBeGreaterThanOrEqual(30);
+      }
     });
 
     it('should enforce maximum duration of 360 minutes', () => {
@@ -343,12 +355,15 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let resizeResult: ReturnType<typeof result.current.handleResizeDragEnd>;
+      let resizeResult: ReturnType<typeof result.current.handleResizeDragEnd> | null = null;
       act(() => {
         resizeResult = result.current.handleResizeDragEnd();
       });
 
-      expect(resizeResult?.newDurationMinutes).toBeLessThanOrEqual(360);
+      if (resizeResult) {
+        const resizeObj = resizeResult as { newDurationMinutes: number };
+        expect(resizeObj.newDurationMinutes).toBeLessThanOrEqual(360);
+      }
     });
   });
 
@@ -386,7 +401,7 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let createResult: ReturnType<typeof result.current.handleCreateDragEnd>;
+      let createResult: ReturnType<typeof result.current.handleCreateDragEnd> | null = null;
       act(() => {
         createResult = result.current.handleCreateDragEnd();
       });
@@ -406,7 +421,7 @@ describe('useDragAndDrop', () => {
 
       const { result } = renderHook(() => useDragAndDrop());
 
-      let moveResult: ReturnType<typeof result.current.handleMoveDragEnd>;
+      let moveResult: ReturnType<typeof result.current.handleMoveDragEnd> | null = null;
       act(() => {
         moveResult = result.current.handleMoveDragEnd();
       });

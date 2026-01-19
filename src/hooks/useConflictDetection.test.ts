@@ -15,7 +15,7 @@ const createReservation = (overrides: Partial<Reservation> = {}): Reservation =>
   endTime: '2024-01-15T14:00:00',
   durationMinutes: 120,
   status: 'CONFIRMED',
-  priority: 'NORMAL',
+  priority: 'STANDARD',
   createdAt: '2024-01-01T00:00:00',
   updatedAt: '2024-01-01T00:00:00',
   ...overrides,

@@ -33,12 +33,34 @@ const mockReservation: Reservation = {
 const mockSelectedDate = new Date('2024-01-15T12:00:00');
 
 describe('ReservationSheet', () => {
-  let mockOnOpenChange: ReturnType<typeof vi.fn>;
-  let mockOnSubmit: ReturnType<typeof vi.fn>;
+  let mockOnOpenChange: (open: boolean) => void;
+  let mockOnSubmit: (
+    data: {
+      customer: { name: string; phone: string; email?: string; notes?: string };
+      partySize: number;
+      durationMinutes: number;
+      status: import('@/types/models').ReservationStatus;
+      priority: import('@/types/models').Priority;
+      tableId?: string;
+      notes?: string;
+      startTime?: string;
+    }
+  ) => void | { success: boolean; error?: string };
 
   beforeEach(() => {
-    mockOnOpenChange = vi.fn();
-    mockOnSubmit = vi.fn(() => ({ success: true }));
+    mockOnOpenChange = vi.fn() as (open: boolean) => void;
+    mockOnSubmit = vi.fn((() => ({ success: true })) as (
+      data: {
+        customer: { name: string; phone: string; email?: string; notes?: string };
+        partySize: number;
+        durationMinutes: number;
+        status: import('@/types/models').ReservationStatus;
+        priority: import('@/types/models').Priority;
+        tableId?: string;
+        notes?: string;
+        startTime?: string;
+      }
+    ) => void | { success: boolean; error?: string });
 
     vi.mocked(useReservationStore).mockImplementation((selector) => {
       const state = {
@@ -62,7 +84,6 @@ describe('ReservationSheet', () => {
           onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.getByText('New Reservation')).toBeInTheDocument();
     });
 
@@ -76,7 +97,6 @@ describe('ReservationSheet', () => {
           onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.getByText('Edit Reservation')).toBeInTheDocument();
     });
 
@@ -87,9 +107,9 @@ describe('ReservationSheet', () => {
           onOpenChange={mockOnOpenChange}
           mode="view"
           reservation={mockReservation}
+          onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.getByText('Reservation Details')).toBeInTheDocument();
     });
 
@@ -102,7 +122,6 @@ describe('ReservationSheet', () => {
           onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.getByRole('button', { name: 'Create Reservation' })).toBeInTheDocument();
     });
 
@@ -116,7 +135,6 @@ describe('ReservationSheet', () => {
           onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
     });
 
@@ -127,9 +145,9 @@ describe('ReservationSheet', () => {
           onOpenChange={mockOnOpenChange}
           mode="view"
           reservation={mockReservation}
+          onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Create Reservation' })).not.toBeInTheDocument();
     });
@@ -143,7 +161,6 @@ describe('ReservationSheet', () => {
           onSubmit={mockOnSubmit}
         />
       );
-
       expect(screen.queryByText('New Reservation')).not.toBeInTheDocument();
     });
   });
@@ -153,7 +170,7 @@ describe('ReservationSheet', () => {
       render(
         <ReservationSheet
           open={true}
-          onOpenChange={mockOnOpenChange}
+            onOpenChange={mockOnOpenChange as (open: boolean) => void}
           mode="create"
           onSubmit={mockOnSubmit}
         />
@@ -193,7 +210,7 @@ describe('ReservationSheet', () => {
       expect(screen.getByText('Table 1')).toBeInTheDocument();
     });
   });
-
+  
   describe('Form Validation', () => {
     it('should not submit without required fields', () => {
       render(
@@ -269,7 +286,7 @@ describe('ReservationSheet', () => {
       render(
         <ReservationSheet
           open={true}
-          onOpenChange={mockOnOpenChange}
+            onOpenChange={mockOnOpenChange as (open: boolean) => void}
           mode="create"
           initialData={{ tableId: 'table-1', startTime: '2024-01-15T18:00:00' }}
           onSubmit={mockOnSubmit}
@@ -297,7 +314,7 @@ describe('ReservationSheet', () => {
     });
 
     it('should display error returned from onSubmit', () => {
-      mockOnSubmit.mockReturnValue({ success: false, error: 'Conflict detected' });
+      (mockOnSubmit as ReturnType<typeof vi.fn>).mockImplementation(() => ({ success: false, error: 'Conflict detected' }));
 
       render(
         <ReservationSheet

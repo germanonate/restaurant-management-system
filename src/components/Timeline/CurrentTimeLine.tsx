@@ -27,8 +27,7 @@ export const CurrentTimeLine = memo(function CurrentTimeLine() {
     <div
       className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none"
       style={{ left: position }}
-      role="presentation"
-      aria-label="Current time indicator"
+      aria-hidden="true"
     >
       <div className="absolute -top-1 -left-1.5 w-3 h-3 rounded-full bg-red-500" />
     </div>

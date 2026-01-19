@@ -5,7 +5,14 @@ export const SLOT_MINUTES = 15;
 export const START_HOUR = 11;
 export const END_HOUR = 24; // Midnight represented as 24 for calculations
 export const BASE_SLOT_WIDTH = 60;
+export const BASE_ROW_HEIGHT = 60;
+// Keep ROW_HEIGHT for backwards compatibility, but prefer getRowHeight(zoomLevel)
 export const ROW_HEIGHT = 60;
+
+// Get row height scaled by zoom level
+export function getRowHeight(zoomLevel: number): number {
+  return (BASE_ROW_HEIGHT * zoomLevel) / 100;
+}
 
 export function getOperatingMinutes(): Minutes {
   return (END_HOUR - START_HOUR) * 60;

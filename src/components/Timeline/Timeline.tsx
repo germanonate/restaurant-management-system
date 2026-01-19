@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, memo, useState } from 'react';
+import { useRef, useCallback, useEffect, memo, useState, startTransition } from 'react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineSidebar } from './TimelineSidebar';
 import { TimelineGrid } from './TimelineGrid';
@@ -6,6 +6,18 @@ import { useReservationStore } from '@/stores/reservationStore';
 import { getCurrentTimePosition, BASE_SLOT_WIDTH } from '@/utils/timeCalculations';
 
 const SIDEBAR_WIDTH = 160;
+
+// Skeleton for deferred loading
+function TimelineSkeleton() {
+  return (
+    <div className="flex-1 flex items-center justify-center bg-muted/20">
+      <div className="flex flex-col items-center gap-2">
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm text-muted-foreground">Loading timeline...</span>
+      </div>
+    </div>
+  );
+}
 
 export interface ViewportState {
   scrollLeft: number;
@@ -22,6 +34,15 @@ export const Timeline = memo(function Timeline() {
   const selectedDate = useReservationStore((state) => state.selectedDate);
   const zoomLevel = useReservationStore((state) => state.zoomLevel);
   const hasScrolledRef = useRef(false);
+
+  // Defer heavy timeline rendering to after initial paint
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    // Use startTransition to mark this as non-urgent, allowing browser to paint first
+    startTransition(() => {
+      setIsReady(true);
+    });
+  }, []);
 
   // Viewport state for virtualization (updated less frequently)
   const [viewport, setViewport] = useState<ViewportState>({
@@ -116,6 +137,19 @@ export const Timeline = memo(function Timeline() {
       }
     };
   }, []);
+
+  // Show skeleton during initial load to reduce TBT
+  if (!isReady) {
+    return (
+      <div
+        className="flex flex-col flex-1 overflow-hidden bg-white"
+        role="region"
+        aria-label="Reservation timeline"
+      >
+        <TimelineSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div

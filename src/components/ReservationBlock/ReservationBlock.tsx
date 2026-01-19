@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { useReservationStore } from '@/stores/reservationStore';
-import { useReservations } from '@/hooks/useReservations';
+import { useReservationActions } from '@/hooks/useReservationActions';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { ReservationContextMenu } from './ReservationContextMenu';
 import { LazyReservationSheet } from './LazyReservationSheet';
@@ -16,7 +16,6 @@ import {
   getReservationPosition,
   getReservationWidth,
   formatTimeRange,
-  ROW_HEIGHT,
 } from '@/utils/timeCalculations';
 import type { Reservation } from '@/types/models';
 import { RESERVATION_STATUS_COLORS, PRIORITY_LABELS } from '@/types/models';
@@ -26,6 +25,7 @@ interface ReservationBlockProps {
   reservation: Reservation;
   top: number;
   slotWidth: number;
+  rowHeight: number;
 }
 
 // Custom comparison to prevent unnecessary re-renders
@@ -44,7 +44,8 @@ function arePropsEqual(
     prevProps.reservation.priority === nextProps.reservation.priority &&
     prevProps.reservation.tableId === nextProps.reservation.tableId &&
     prevProps.top === nextProps.top &&
-    prevProps.slotWidth === nextProps.slotWidth
+    prevProps.slotWidth === nextProps.slotWidth &&
+    prevProps.rowHeight === nextProps.rowHeight
   );
 }
 
@@ -52,10 +53,12 @@ export const ReservationBlock = memo(function ReservationBlock({
   reservation,
   top,
   slotWidth,
+  rowHeight,
 }: ReservationBlockProps) {
   const selectedDate = useReservationStore((state) => state.selectedDate);
   const blockRef = useRef<HTMLDivElement>(null);
 
+  // Use lightweight actions hook - doesn't subscribe to data, prevents unnecessary re-renders
   const {
     updateReservation,
     deleteReservation,
@@ -65,7 +68,7 @@ export const ReservationBlock = memo(function ReservationBlock({
     finishReservation,
     markNoShow,
     cancelReservation,
-  } = useReservations();
+  } = useReservationActions();
 
   const {
     handleMoveDragStart,
@@ -148,66 +151,70 @@ export const ReservationBlock = memo(function ReservationBlock({
   const showConflict = isBeingDragged && hasConflict;
 
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={300}>
-        <ReservationContextMenu
-          reservation={reservation}
-          onEdit={handleEdit}
-          onConfirm={() => confirmReservation(reservation.id)}
-          onSeat={() => seatReservation(reservation.id)}
-          onFinish={() => finishReservation(reservation.id)}
-          onNoShow={() => markNoShow(reservation.id)}
-          onCancel={() => cancelReservation(reservation.id)}
-          onDuplicate={handleDuplicate}
-          onDelete={handleDelete}
-        >
-          <TooltipTrigger asChild>
-            <div
-              ref={blockRef}
-              className={cn(
-                'absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing',
-                'flex items-center gap-1 px-2 overflow-hidden',
-                'transition-all hover:shadow-md',
-                'group',
-                isCancelled && 'opacity-60',
-                isBeingDragged && 'opacity-80 shadow-lg z-50',
-                showConflict && 'border-2 border-red-500 shadow-red-500/50 shadow-lg'
-              )}
-              style={{
-                left,
-                top: top + 4,
-                width: Math.max(width, 40),
-                height: ROW_HEIGHT - 8,
-                backgroundColor: showConflict ? '#FEE2E2' : statusColor,
-                borderColor: showConflict ? undefined : (isCancelled ? '#6B7280' : statusColor),
-                backgroundImage: isCancelled && !showConflict
-                  ? 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(107,114,128,0.3) 5px, rgba(107,114,128,0.3) 10px)'
-                  : undefined,
-                transform: 'translateZ(0)', // GPU acceleration
-                willChange: isBeingDragged ? 'transform' : 'auto',
-              }}
-              onMouseDown={handleMouseDown}
-              onDoubleClick={handleDoubleClick}
-              role="button"
-              tabIndex={0}
-              aria-label={`${reservation.customer.name}, ${reservation.partySize} guests, ${formatTimeRange(reservation.startTime, reservation.endTime)}`}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setSheetOpen(true);
-                }
-              }}
-            >
+    <>
+      <TooltipProvider>
+        <Tooltip delayDuration={300}>
+          <ReservationContextMenu
+            reservation={reservation}
+            onEdit={handleEdit}
+            onConfirm={() => confirmReservation(reservation.id)}
+            onSeat={() => seatReservation(reservation.id)}
+            onFinish={() => finishReservation(reservation.id)}
+            onNoShow={() => markNoShow(reservation.id)}
+            onCancel={() => cancelReservation(reservation.id)}
+            onDuplicate={handleDuplicate}
+            onDelete={handleDelete}
+          >
+            <TooltipTrigger asChild>
+              <div
+                ref={blockRef}
+                className={cn(
+                  'absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing',
+                  'flex items-center gap-1 px-2 overflow-hidden',
+                  'transition-shadow hover:shadow-md',
+                  'group',
+                  isCancelled && 'opacity-60',
+                  isBeingDragged && 'opacity-80 shadow-lg z-50',
+                  showConflict && 'border-2 border-red-500 shadow-red-500/50 shadow-lg'
+                )}
+                style={{
+                  left,
+                  top: top + 4,
+                  width: Math.max(width, 40),
+                  height: rowHeight - 8,
+                  backgroundColor: showConflict ? '#FEE2E2' : statusColor,
+                  borderColor: showConflict ? undefined : (isCancelled ? '#9CA3AF' : statusColor),
+                  backgroundImage: isCancelled && !showConflict
+                    ? 'repeating-linear-gradient(45deg, #D1D5DB, #D1D5DB 4px, #9CA3AF 4px, #9CA3AF 8px)'
+                    : undefined,
+                  transform: 'translateZ(0)', // GPU acceleration
+                  willChange: isBeingDragged ? 'transform' : 'auto',
+                }}
+                onMouseDown={handleMouseDown}
+                onDoubleClick={handleDoubleClick}
+                role="button"
+                tabIndex={0}
+                aria-label={`${reservation.customer.name}, ${reservation.partySize} guests, ${formatTimeRange(reservation.startTime, reservation.endTime)}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSheetOpen(true);
+                  }
+                }}
+              >
               {/* Left resize handle */}
               <div
                 className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover:opacity-100 flex items-center justify-center"
                 aria-hidden="true"
               >
-                <GripVertical className="h-4 w-4 text-white/70" />
+                <GripVertical className={cn("h-4 w-4", isCancelled ? "text-gray-600" : "text-white/70")} />
               </div>
 
               {/* Content */}
-              <div className="flex items-center gap-1.5 min-w-0 flex-1 text-white pl-2">
+              <div className={cn(
+                "flex items-center gap-1.5 min-w-0 flex-1 pl-2",
+                isCancelled ? "text-gray-700" : "text-white"
+              )}>
                 <Users className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="text-xs font-medium" aria-hidden="true">
                   {reservation.partySize}
@@ -226,7 +233,10 @@ export const ReservationBlock = memo(function ReservationBlock({
               {reservation.priority !== 'STANDARD' && width > 160 && (
                 <Badge
                   variant="secondary"
-                  className="bg-white/20 text-white text-xs shrink-0"
+                  className={cn(
+                    "text-xs shrink-0",
+                    isCancelled ? "bg-gray-500/30 text-gray-700" : "bg-white/20 text-white"
+                  )}
                 >
                   {PRIORITY_LABELS[reservation.priority]}
                 </Badge>
@@ -237,33 +247,34 @@ export const ReservationBlock = memo(function ReservationBlock({
                 className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize opacity-0 group-hover:opacity-100 flex items-center justify-center"
                 aria-hidden="true"
               >
-                <GripVertical className="h-4 w-4 text-white/70" />
+                <GripVertical className={cn("h-4 w-4", isCancelled ? "text-gray-600" : "text-white/70")} />
               </div>
-            </div>
-          </TooltipTrigger>
-        </ReservationContextMenu>
+              </div>
+            </TooltipTrigger>
+          </ReservationContextMenu>
 
-        <TooltipContent side="top" className="max-w-xs">
-          <div className="space-y-1">
-            <p className="font-medium">{reservation.customer.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {reservation.customer.phone}
-            </p>
-            <p className="text-sm">
-              {reservation.partySize} guests •{' '}
-              {formatTimeRange(reservation.startTime, reservation.endTime)}
-            </p>
-            {reservation.notes && (
+          <TooltipContent side="top" className="max-w-xs">
+            <div className="space-y-1">
+              <p className="font-medium">{reservation.customer.name}</p>
               <p className="text-sm text-muted-foreground">
-                {reservation.notes}
+                {reservation.customer.phone}
               </p>
-            )}
-            <p className="text-xs text-muted-foreground capitalize">
-              Status: {reservation.status.toLowerCase().replace('_', ' ')}
-            </p>
-          </div>
-        </TooltipContent>
-      </Tooltip>
+              <p className="text-sm">
+                {reservation.partySize} guests •{' '}
+                {formatTimeRange(reservation.startTime, reservation.endTime)}
+              </p>
+              {reservation.notes && (
+                <p className="text-sm text-muted-foreground">
+                  {reservation.notes}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground capitalize">
+                Status: {reservation.status.toLowerCase().replace('_', ' ')}
+              </p>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       <LazyReservationSheet
         open={sheetOpen}
@@ -283,6 +294,6 @@ export const ReservationBlock = memo(function ReservationBlock({
           return result;
         }}
       />
-    </TooltipProvider>
+    </>
   );
 }, arePropsEqual);

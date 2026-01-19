@@ -718,9 +718,9 @@ export const seedReservations: Reservation[] = [
     tableId: 'T3',
     customer: { name: 'Alicia Godoy', phone: '+54 9 11 5555-6666' },
     partySize: 5,
-    startTime: todayAt(22, 30),
+    startTime: todayAt(23, 15),
     endTime: todayAt(23, 45),
-    durationMinutes: 75,
+    durationMinutes: 30,
     status: 'PENDING',
     priority: 'STANDARD',
     source: 'web',
@@ -804,82 +804,143 @@ export const seedReservations: Reservation[] = [
 // Pre-generated test data for stress testing (150 extra reservations for today)
 const TEST_FIRST_NAMES = ['Juan', 'Maria', 'Carlos', 'Ana', 'Pedro', 'Laura', 'Diego', 'Sofia', 'Martin', 'Valentina', 'Lucas', 'Camila', 'Nicolas', 'Isabella', 'Mateo', 'Emma', 'Santiago', 'Mia', 'Sebastian', 'Paula'];
 const TEST_LAST_NAMES = ['Garcia', 'Rodriguez', 'Martinez', 'Lopez', 'Gonzalez', 'Perez', 'Sanchez', 'Romero', 'Torres', 'Flores', 'Rivera', 'Gomez', 'Diaz', 'Reyes', 'Cruz', 'Morales', 'Ortiz', 'Gutierrez', 'Chavez', 'Ramos'];
-const TEST_DURATIONS = [60, 75, 90, 105, 120];
+const TEST_DURATIONS = [30, 45, 60, 75, 90]; // Shorter durations to fit more reservations
 const TEST_STATUSES: Reservation['status'][] = ['PENDING', 'CONFIRMED', 'SEATED', 'FINISHED'];
 const TEST_PRIORITIES: Reservation['priority'][] = ['STANDARD', 'VIP', 'LARGE_GROUP'];
 
-// Generate 150 test reservations for today (will overlap - that's ok for stress testing)
+// Helper to convert hours:minutes to total minutes from midnight
+function toMinutes(hour: number, minute: number): number {
+  return hour * 60 + minute;
+}
+
+// Generate 150 test reservations for today WITHOUT conflicts
 function createTestReservations(): Reservation[] {
   const reservations: Reservation[] = [];
 
-  // Time slots throughout the day (11:00 to 23:00)
-  const timeSlots = [
-    { hour: 11, minute: 0 },
-    { hour: 11, minute: 30 },
-    { hour: 12, minute: 0 },
-    { hour: 12, minute: 30 },
-    { hour: 13, minute: 0 },
-    { hour: 13, minute: 30 },
-    { hour: 14, minute: 0 },
-    { hour: 14, minute: 30 },
-    { hour: 15, minute: 0 },
-    { hour: 15, minute: 30 },
-    { hour: 16, minute: 0 },
-    { hour: 17, minute: 0 },
-    { hour: 18, minute: 0 },
-    { hour: 19, minute: 0 },
-    { hour: 19, minute: 30 },
-    { hour: 20, minute: 0 },
-    { hour: 20, minute: 30 },
-    { hour: 21, minute: 0 },
-    { hour: 21, minute: 30 },
-    { hour: 22, minute: 0 },
-    { hour: 22, minute: 30 },
-    { hour: 23, minute: 0 },
-  ];
+  // Track occupied time ranges per table: tableId -> array of {start, end} in minutes
+  const tableOccupancy = new Map<string, Array<{ start: number; end: number }>>();
 
-  let id = 100; // Start from 100 to avoid collision with seed IDs
+  // Initialize with existing seed reservations' time slots
+  for (const res of seedReservations) {
+    const startDate = new Date(res.startTime);
+    const endDate = new Date(res.endTime);
+    const startMinutes = toMinutes(startDate.getHours(), startDate.getMinutes());
+    const endMinutes = toMinutes(endDate.getHours(), endDate.getMinutes());
 
-  // Distribute reservations across tables and time slots
-  for (let i = 0; i < 150; i++) {
-    const table = seedTables[i % seedTables.length];
-    const slot = timeSlots[i % timeSlots.length];
+    if (!tableOccupancy.has(res.tableId)) {
+      tableOccupancy.set(res.tableId, []);
+    }
+    tableOccupancy.get(res.tableId)!.push({ start: startMinutes, end: endMinutes });
+  }
 
-    const firstName = TEST_FIRST_NAMES[i % TEST_FIRST_NAMES.length];
-    const lastName = TEST_LAST_NAMES[(i * 3) % TEST_LAST_NAMES.length];
-    const durationMinutes = TEST_DURATIONS[i % TEST_DURATIONS.length];
-    const partySize = Math.min(table.capacity.max, Math.max(table.capacity.min, 2 + (i % 4)));
+  // Time slots throughout the day (8:00 to 23:45) - 15 min intervals for more options
+  const allTimeSlots: Array<{ hour: number; minute: number }> = [];
+  for (let hour = 8; hour <= 23; hour++) {
+    for (const minute of [0, 15, 30, 45]) {
+      if (hour === 23 && minute === 45) continue;
+      allTimeSlots.push({ hour, minute });
+    }
+  }
 
-    const startTime = todayAt(slot.hour, slot.minute);
-    const endHour = slot.hour + Math.floor((slot.minute + durationMinutes) / 60);
-    const endMinute = (slot.minute + durationMinutes) % 60;
-    const endTime = todayAt(endHour, endMinute);
+  // Check if a time range is available for a table
+  function isSlotAvailable(tableId: string, startMin: number, endMin: number): boolean {
+    const occupied = tableOccupancy.get(tableId) || [];
+    for (const range of occupied) {
+      if (!(endMin <= range.start || startMin >= range.end)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
-    reservations.push({
-      id: `RES_TEST_${String(id).padStart(3, '0')}`,
-      tableId: table.id,
-      customer: {
-        name: `${firstName} ${lastName}`,
-        phone: `+54 9 11 ${1000 + id}-${2000 + id}`,
-        email: i % 2 === 0 ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@test.com` : undefined,
-      },
-      partySize,
-      startTime,
-      endTime,
-      durationMinutes,
-      status: TEST_STATUSES[i % TEST_STATUSES.length],
-      priority: TEST_PRIORITIES[i % TEST_PRIORITIES.length],
-      notes: i % 5 === 0 ? 'Test reservation note' : undefined,
-      source: i % 2 === 0 ? 'web' : 'phone',
-      createdAt: daysAgoAt(1, 10, 0),
-      updatedAt: todayAt(12, 0),
-    });
+  // Mark a slot as occupied
+  function occupySlot(tableId: string, startMin: number, endMin: number): void {
+    if (!tableOccupancy.has(tableId)) {
+      tableOccupancy.set(tableId, []);
+    }
+    tableOccupancy.get(tableId)!.push({ start: startMin, end: endMin });
+  }
 
-    id++;
+  let id = 100;
+  let tableIndex = 0;
+  let slotIndex = 0;
+
+  // Create exactly 150 reservations by iterating through all combinations
+  while (reservations.length < 150) {
+    const table = seedTables[tableIndex % seedTables.length];
+    const durationMinutes = TEST_DURATIONS[reservations.length % TEST_DURATIONS.length];
+
+    // Try to find an available slot for this table
+    let foundSlot = false;
+    const startSlotIndex = slotIndex;
+
+    do {
+      const slot = allTimeSlots[slotIndex % allTimeSlots.length];
+      const startMinutes = toMinutes(slot.hour, slot.minute);
+      const endMinutes = startMinutes + durationMinutes;
+
+      // Don't go past midnight
+      if (endMinutes <= 1440 && isSlotAvailable(table.id, startMinutes, endMinutes)) {
+        const firstName = TEST_FIRST_NAMES[reservations.length % TEST_FIRST_NAMES.length];
+        const lastName = TEST_LAST_NAMES[(reservations.length * 3) % TEST_LAST_NAMES.length];
+        const partySize = Math.min(table.capacity.max, Math.max(table.capacity.min, 2 + (reservations.length % 4)));
+
+        const startTime = todayAt(slot.hour, slot.minute);
+        const endHour = Math.floor(endMinutes / 60);
+        const endMinute = endMinutes % 60;
+        const endTime = todayAt(endHour, endMinute);
+
+        reservations.push({
+          id: `RES_TEST_${String(id).padStart(3, '0')}`,
+          tableId: table.id,
+          customer: {
+            name: `${firstName} ${lastName}`,
+            phone: `+54 9 11 ${1000 + id}-${2000 + id}`,
+            email: reservations.length % 2 === 0 ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@test.com` : undefined,
+          },
+          partySize,
+          startTime,
+          endTime,
+          durationMinutes,
+          status: TEST_STATUSES[reservations.length % TEST_STATUSES.length],
+          priority: TEST_PRIORITIES[reservations.length % TEST_PRIORITIES.length],
+          notes: reservations.length % 5 === 0 ? 'Test reservation note' : undefined,
+          source: reservations.length % 2 === 0 ? 'web' : 'phone',
+          createdAt: daysAgoAt(1, 10, 0),
+          updatedAt: todayAt(12, 0),
+        });
+
+        occupySlot(table.id, startMinutes, endMinutes);
+        id++;
+        foundSlot = true;
+        slotIndex++;
+        break;
+      }
+
+      slotIndex++;
+    } while (slotIndex % allTimeSlots.length !== startSlotIndex % allTimeSlots.length);
+
+    // Move to next table
+    tableIndex++;
+
+    // Safety: if we've cycled through all tables without finding a slot, reset slot index
+    if (!foundSlot && tableIndex % seedTables.length === 0) {
+      slotIndex++;
+    }
+
+    // Emergency exit if we've tried too many times
+    if (tableIndex > 5000) break;
   }
 
   return reservations;
 }
 
-// Pre-generated test data - created once at module load
-export const testReservations: Reservation[] = createTestReservations();
+// Lazy test data generator - only created when requested
+let cachedTestReservations: Reservation[] | null = null;
+
+export function getTestReservations(): Reservation[] {
+  if (!cachedTestReservations) {
+    cachedTestReservations = createTestReservations();
+  }
+  return cachedTestReservations;
+}

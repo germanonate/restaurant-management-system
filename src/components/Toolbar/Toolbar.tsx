@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar } from '@/components/ui/calendar';
+import { LazyCalendar } from '@/components/ui/lazy-calendar';
 import {
   Popover,
   PopoverContent,
@@ -44,8 +44,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useReservationStore } from '@/stores/reservationStore';
-import { useReservations } from '@/hooks/useReservations';
-import { ReservationSheet } from '@/components/ReservationBlock/ReservationSheet';
+import { useReservationActions } from '@/hooks/useReservationActions';
+import { LazyReservationSheet } from '@/components/ReservationBlock/LazyReservationSheet';
 import type { ReservationStatus, UUID } from '@/types/models';
 import { STATUS_LABELS } from '@/types/models';
 import { cn } from '@/lib/utils';
@@ -66,8 +66,57 @@ export function Toolbar() {
   const canUndo = useReservationStore((state) => state.canUndo);
   const canRedo = useReservationStore((state) => state.canRedo);
   const loadTestData = useReservationStore((state) => state.loadTestData);
+  const testDataLoaded = useReservationStore((state) => state.testDataLoaded);
+  const reservations = useReservationStore((state) => state.reservations);
+  const tables = useReservationStore((state) => state.tables);
 
-  const { totalCount, filteredCount, createReservation } = useReservations();
+  // Use lightweight actions hook
+  const { createReservation } = useReservationActions();
+
+  // Compute counts for selected day
+  const { totalCount, filteredCount } = useMemo(() => {
+    let total = 0;
+    let filtered = 0;
+
+    for (const reservation of reservations) {
+      // Date filter - both counts only include selected day
+      const resDate = parseISO(reservation.startTime);
+      if (resDate.toDateString() !== selectedDate.toDateString()) {
+        continue;
+      }
+
+      // Count for total (all reservations for this day)
+      total++;
+
+      // Apply additional filters for filtered count
+      // Sector filter
+      if (filters.sectorIds.length > 0) {
+        const table = tables.find((t) => t.id === reservation.tableId);
+        if (!table || !filters.sectorIds.includes(table.sectorId)) {
+          continue;
+        }
+      }
+
+      // Status filter
+      if (filters.status && reservation.status !== filters.status) {
+        continue;
+      }
+
+      // Search filter
+      if (filters.searchQuery) {
+        const query = filters.searchQuery.toLowerCase();
+        const matchesName = reservation.customer.name.toLowerCase().includes(query);
+        const matchesPhone = reservation.customer.phone.toLowerCase().includes(query);
+        if (!matchesName && !matchesPhone) {
+          continue;
+        }
+      }
+
+      filtered++;
+    }
+
+    return { totalCount: total, filteredCount: filtered };
+  }, [reservations, filters, selectedDate, tables]);
 
   const [searchValue, setSearchValue] = useState(filters.searchQuery);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -213,7 +262,7 @@ export function Toolbar() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
+              <LazyCalendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => {
@@ -398,9 +447,12 @@ export function Toolbar() {
                 New Reservation
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => loadTestData()}>
+              <DropdownMenuItem
+                onClick={() => loadTestData()}
+                disabled={testDataLoaded}
+              >
                 <Database className="h-4 w-4 mr-2" />
-                Add Test Data
+                {testDataLoaded ? 'Test Data Added' : 'Add Test Data'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -424,7 +476,7 @@ export function Toolbar() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
+              <LazyCalendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => {
@@ -478,9 +530,12 @@ export function Toolbar() {
                 New Reservation
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => loadTestData()}>
+              <DropdownMenuItem
+                onClick={() => loadTestData()}
+                disabled={testDataLoaded}
+              >
                 <Database className="h-4 w-4 mr-2" />
-                Add Test Data
+                {testDataLoaded ? 'Test Data Added' : 'Add Test Data'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -653,7 +708,7 @@ export function Toolbar() {
       </div>
 
       {/* Create Reservation Sheet */}
-      <ReservationSheet
+      <LazyReservationSheet
         open={createSheetOpen}
         onOpenChange={setCreateSheetOpen}
         mode="create"

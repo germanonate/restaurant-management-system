@@ -32,21 +32,18 @@ export const TimelineHeader = memo(function TimelineHeader({
   return (
     <div
       className="sticky top-0 z-30 flex bg-white border-b border-border"
-      role="row"
-      aria-label="Time slots header"
+      aria-hidden="true"
     >
       {/* Corner spacer */}
       <div
         className="sticky left-0 z-40 bg-white border-r border-border shrink-0"
         style={{ width: sidebarWidth }}
-        aria-hidden="true"
       />
 
       {/* Time slots - render all for smooth scrolling */}
       <div
         className="relative h-10"
         style={{ width: totalSlots * slotWidth }}
-        role="rowheader"
       >
         {timeLabels.map(({ slot, label }) => (
           <div
@@ -56,7 +53,6 @@ export const TimelineHeader = memo(function TimelineHeader({
               left: slot * slotWidth + 4,
               width: slotWidth - 4,
             }}
-            aria-label={label}
           >
             {label}
           </div>
@@ -67,7 +63,6 @@ export const TimelineHeader = memo(function TimelineHeader({
             key={`line-${slot}`}
             className="absolute top-0 bottom-0 w-px bg-border"
             style={{ left: slot * slotWidth }}
-            aria-hidden="true"
           />
         ))}
       </div>

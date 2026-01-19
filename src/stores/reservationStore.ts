@@ -9,7 +9,7 @@ import type {
   FilterState,
   DragState,
 } from '@/types/models';
-import { seedRestaurant, seedSectors, seedTables, seedReservations, testReservations } from '@/seed/seed';
+import { seedRestaurant, seedSectors, seedTables, seedReservations, getTestReservations } from '@/seed/seed';
 import { parseISO, isSameDay } from 'date-fns';
 
 interface HistoryEntry {
@@ -237,13 +237,13 @@ export const useReservationStore = create<ReservationStore>((set, get) => ({
     return newReservation;
   },
 
-  // Test data (can only be loaded once)
+  // Test data (can only be loaded once, generated lazily)
   loadTestData: () =>
     set((state) => {
       if (state.testDataLoaded) return state;
       return {
         ...saveToHistory(state),
-        reservations: [...state.reservations, ...testReservations],
+        reservations: [...state.reservations, ...getTestReservations()],
         testDataLoaded: true,
       };
     }),

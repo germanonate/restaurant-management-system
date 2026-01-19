@@ -101,7 +101,7 @@ export const RESERVATION_STATUS_COLORS: Record<ReservationStatus, string> = {
   SEATED: '#10B981',
   FINISHED: '#9CA3AF',
   NO_SHOW: '#EF4444',
-  CANCELLED: '#6B7280',
+  CANCELLED: '#D1D5DB', // Light gray base for striped pattern
 };
 
 export const PRIORITY_LABELS: Record<Priority, string> = {

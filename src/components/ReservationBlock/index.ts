@@ -3,8 +3,8 @@ export { ReservationBlock } from './ReservationBlock';
 export { ReservationContextMenu } from './components/ReservationContextMenu';
 
 // Lazy-loaded sheet
-export { LazyReservationSheet } from './components/LazyReservationSheet';
-export { preloadReservationSheet } from './components/preloadReservationSheet';
+export { LazyReservationSheet } from './components/ReservationSheet/LazyReservationSheet';
+export { preloadReservationSheet } from './components/ReservationSheet/preloadReservationSheet';
 
 // Sub-components
 export { ResizeHandle } from './components/ResizeHandle';

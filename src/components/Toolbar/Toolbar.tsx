@@ -35,7 +35,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useReservationStore } from '@/stores/reservationStore';
 import { useReservationActions } from '@/hooks/useReservationActions';
-import { LazyReservationSheet } from '@/components/ReservationBlock/components/LazyReservationSheet';
+import { LazyReservationSheet } from '@/components/ReservationBlock/components/ReservationSheet/LazyReservationSheet';
 import { UndoRedoControls } from './components/UndoRedoControls';
 import { ZoomControls } from './components/ZoomControls';
 import {

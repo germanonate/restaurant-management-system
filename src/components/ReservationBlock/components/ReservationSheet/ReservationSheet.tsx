@@ -44,14 +44,12 @@ import { STATUS_LABELS, PRIORITY_LABELS } from '@/types/models';
 import { cn } from '@/lib/utils';
 import { START_HOUR, END_HOUR, SLOT_MINUTES } from '@/components/Timeline/utils/timeCalculations';
 import { DURATION_OPTIONS, MIN_DURATION, MAX_DURATION } from '@/constants/reservationConstants';
-import {
-  generateReservationTimeOptions,
-} from '../constants/timeConstants';
+import { generateReservationTimeOptions } from '../../utils/timeUtils';
 import {
   getDateReservations,
   hasTimeConflict,
   isTableCapacityValid,
-} from '../utils/reservationCalculations';
+} from '../../utils/reservationCalculations';
 
 interface ReservationSheetProps {
   open: boolean;

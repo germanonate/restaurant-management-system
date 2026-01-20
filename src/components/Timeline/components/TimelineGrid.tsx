@@ -8,7 +8,7 @@ import { ReservationBlock } from '@/components/ReservationBlock';
 import { CurrentTimeLine } from './CurrentTimeLine';
 import { DragPreview } from './DragPreview';
 import { VerticalGridLines, HorizontalGridLines, SectorBackgrounds } from './GridLines';
-import { LazyReservationSheet } from '@/components/ReservationBlock/components/LazyReservationSheet';
+import { LazyReservationSheet } from '@/components/ReservationBlock/components/ReservationSheet/LazyReservationSheet';
 import { getTotalSlots, BASE_SLOT_WIDTH, BASE_ROW_HEIGHT, timeToSlotIndex, durationToSlots } from '../utils/timeCalculations';
 import { isSameDay, parseISO } from 'date-fns';
 import type { UUID, Reservation } from '@/types/models';

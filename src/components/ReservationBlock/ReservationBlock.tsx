@@ -4,7 +4,7 @@ import { useReservationStore } from '@/stores/reservationStore';
 import { useReservationActions } from '@/hooks/useReservationActions';
 import { useDragAndDrop } from '@/components/Timeline/hooks/useDragAndDrop';
 import { ReservationContextMenu } from './components/ReservationContextMenu';
-import { LazyReservationSheet } from './components/LazyReservationSheet';
+import { LazyReservationSheet } from './components/ReservationSheet/LazyReservationSheet';
 import { ResizeHandle } from './components/ResizeHandle';
 import { ReservationContent } from './components/ReservationContent';
 import { ReservationTooltip } from './components/ReservationTooltip';

@@ -4,7 +4,7 @@ import { useConflictDetection } from './useConflictDetection';
 import type { Reservation, UUID, ReservationStatus, Customer, Priority } from '@/types/models';
 import { addMinutes, parseISO, isSameDay } from 'date-fns';
 
-interface CreateReservationInput {
+interface ReservationInputBase {
   tableId: UUID;
   customer: Customer;
   partySize: number;
@@ -15,16 +15,9 @@ interface CreateReservationInput {
   notes?: string;
 }
 
-interface UpdateReservationInput {
-  customer?: Customer;
-  partySize?: number;
-  startTime?: Date;
-  durationMinutes?: number;
-  status?: ReservationStatus;
-  priority?: Priority;
-  notes?: string;
-  tableId?: UUID;
-}
+type CreateReservationInput = ReservationInputBase;
+
+type UpdateReservationInput = Partial<ReservationInputBase>;
 
 interface UseReservationsReturn {
   // Data
